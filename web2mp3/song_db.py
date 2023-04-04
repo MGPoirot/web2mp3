@@ -1,8 +1,5 @@
-from utils import pickle_in, pickle_out
+from utils import pickle_in, pickle_out, song_db_file
 import os
-
-
-song_db_file = os.path.join(os.getcwd(), '../song_db.pkl')
 
 
 def get_song_db() -> dict:

@@ -1,5 +1,5 @@
 import pandas as pd
-from web2mp3.web2mp3.utils import spotify, print_space, input_is, flatten
+from utils import spotify, print_space, input_is, flatten
 from datetime import datetime
 import eyed3
 import requests

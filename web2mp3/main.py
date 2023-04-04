@@ -1,42 +1,24 @@
 import os
-from dotenv import load_dotenv
-load_dotenv()
-from youtubesearchpython import VideosSearch
+
 import sys
 import pandas as pd
 import pytube
 from time import sleep
-from utils import print_space, spotify, Logger, input_is
-from song_db import get_song_db, set_song_db
+from utils import print_space, spotify, Logger, input_is, get_url_domain, log_dir, shorten_url
 from tag_manager import get_track_tags, manual_track_tags
-from yt2mp3 import yt_download
+import youtube
+import soundcloud
+from song_db import set_song_db, get_song_db
+from download_daemon import start_daemon
 
 
-def yt_url2title(youtube_url: str, logger: Logger) -> str:
-    """
-    Receives the link to a YouTube or YouTube Music video and returns the title
-    :param logger:
-    :param youtube_url: URL as string
-    :logger logging object:
-    :return: title as string
-    """
-    # Get video title
-    yt_search_result = VideosSearch(youtube_url, limit=1).result()
-    if not any(yt_search_result['result']):
-        logger(f'ValueError: No video found for "{youtube_url}"', verbose=True)
-        return None
-    video_title = yt_search_result['result'][0]['title']
-    uploader_id = yt_search_result['result'][0]['channel']['name']
-    if uploader_id not in video_title:
-        video_title += f' - {uploader_id}'
-    return video_title
+def spotify_lookup(spotify_query: str, logger: Logger, market='NL', default_response=None) -> pd.Series:
+    accept_origin = 'the user' if default_response is None else 'default'
+    search_limit = 5
+    if isinstance(default_response, str):
+        if default_response.isdigit():
+            search_limit = int(default_response)
 
-
-def sc_url2title(soundcloud_url: str, logger: Logger) -> str:
-    raise NotImplementedError('Soundcloud API connection has not been implemented yet')
-
-
-def spotify_lookup(spotify_query: str, logger: Logger, market='NL') -> pd.Series:
     while True:
         # Check the first 5 search result for a clear match
         logger('Searching Spotify for'.ljust(print_space), f'"{spotify_query}"', verbose=True)
@@ -45,7 +27,7 @@ def spotify_lookup(spotify_query: str, logger: Logger, market='NL') -> pd.Series
         are_screwed_over = False
         while results is None:
             try:
-                results = spotify.search(q=spotify_query, market=market, limit=5, type='track')
+                results = spotify.search(q=spotify_query, market=market, limit=search_limit, type='track')
             except KeyboardInterrupt:
                 return
             except TimeoutError:
@@ -69,15 +51,21 @@ def spotify_lookup(spotify_query: str, logger: Logger, market='NL') -> pd.Series
         # Without clear match provide the user with four options:
         try:
             logger('NO clear Spotify match. Select:', verbose=True)
-            proceed = input(f'>> [1]/2/3/4/5/Retry/Manual/Abort/Change market: ') or '1'
+            if default_response is None:
+                proceed = input(f'>> [1]/2/3/4/5/Retry/Manual/Abort/Change market: ') or '1'
+            else:
+                proceed = default_response
         except IndexError:
             logger('Query did not return any results', verbose=True)
-            proceed = input(f'>> Retry/Manual/Abort/Change market:') or 'Retry'
+            if default_response is None:
+                proceed = input(f'>> Retry/Manual/Abort/Change market:') or 'Retry'
+            else:
+                proceed = default_response
 
         # Take action according to user input
         if proceed.isdigit():
             t = get_track_tags(items[int(proceed) - 1], do_light=False)
-            logger('Match accepted by user'.ljust(print_space), f'{t.title} - {t.album} - {t.album_artist}', verbose=True)
+            logger(f'Match accepted by {accept_origin}'.ljust(print_space), f'{t.title} - {t.album} - {t.album_artist}', verbose=True)
             return t
         elif input_is('Retry', proceed):
             logger('Provide new info for Spotify query', verbose=True)
@@ -92,44 +80,44 @@ def spotify_lookup(spotify_query: str, logger: Logger, market='NL') -> pd.Series
         elif input_is('Change market', proceed):
             new_market = input('>> Market code?'.ljust(print_space)) or None
             logger('Market changed to:'.ljust(print_space), verbose=True)
-            return spotify_lookup(spotify_query, market=new_market, logger=logger)
+            return spotify_lookup(spotify_query, market=new_market, logger=logger, default_response=default_response)
         else:
             logger(f'Invalid input "{proceed}"')
+            if default_response is not None:
+                return
 
 
-def match_url_to_spotify(track_url: str, logger: Logger, market='NL'):
+def match_url_to_spotify(track_url: str, logger: Logger, market='NL', default_response=None):
     """
     This function matches a given YouTube URL, and writes what it found to the song database,
     after which it calls this function again, but as a background process, and finishes.
     """
     # TODO: implement test if the URL is a YouTube or any other URL
-    url_type = 'youtube'
+    url_domain = get_url_domain(track_url)
 
-    title_method = False
-    if url_type == 'youtube':
-        title_method = yt_url2title
-    elif url_type == 'soundcloud':
-        title_method = sc_url2title
-    elif url_type == 'spotify':
+    module = False
+    if url_domain == 'youtube':
+        module = youtube
+    elif url_domain == 'soundcloud':
+        module = soundcloud
+    elif url_domain == 'spotify':
         item = spotify.track(track_url, market=market)[0]
         track_tags = get_track_tags(item, do_light=False)
         # TODO: implement a YouTube lookup, and call pull_song with the YouTube URL
         pass
     else:
-        raise ValueError(f'Unrecognized URL type: "{url_type}"')
+        raise ValueError(f'Unrecognized URL type: "{url_domain}"')
 
-    if title_method:
+    if module:
         # Find match
-        sp_query = title_method(track_url, logger=logger)
+        sp_query = module.url2title(track_url, logger=logger)
         if sp_query is None:
-            logger(f'Lookup of a "{url_type}" URL did not return a query for Spotify.')
-            logger.close()
+            logger(f'Lookup of a "{url_domain}" URL did not return a query for Spotify.')
             return
 
-        track_tags = spotify_lookup(sp_query, logger=logger)
+        track_tags = spotify_lookup(sp_query, logger=logger, default_response=default_response)
         if track_tags is None:
             logger('Spotify lookup did not return a dict of tags')
-            logger.close()
             return
 
     # Write match to song database entry
@@ -137,18 +125,51 @@ def match_url_to_spotify(track_url: str, logger: Logger, market='NL'):
     logger('Created Song DB entry')
     
     # Commence background process
-    # TODO: dont call this fuction, but call a manager
-    command = f"nice -n 19 nohup sudo python main.py {track_url} > /dev/null 2>&1 &"
-    logger(command)
-    os.system(command)
-    logger.close()
     return
+
+
+def init_matching(*urls, default_response=None):
+    for i, url in enumerate(urls):
+        if url in get_song_db():
+            continue
+
+        url = url.split('&')[0]
+        if 'playlist' in url:
+            playlist_urls = pytube.Playlist(url)
+            do_playlist = input(f'Received playlist with {len(playlist_urls)} items. Proceed? [Yes]/No  '.ljust(print_space))
+            if input_is('No', do_playlist):
+                print('Playlist skipped.')
+                continue
+            elif input_is('Yes', do_playlist) or not do_playlist:
+                default_response = input('Set default response procedure?: [None]/1/Abort  '.ljust(print_space)) or None
+                if default_response is None:
+                    pass
+                elif input_is('None', default_response):
+                    default_response = None
+                elif not input_is('1', default_response) and not input_is('Abort', default_response):
+                    print('Invalid input:'.ljust(print_space), f'"{default_response}"')
+                    default_response = None
+                init_matching(*playlist_urls, default_response=default_response)
+            else:
+                print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
+        else:
+            logger_path = log_dir.format(shorten_url(url))
+            log_obj = Logger(logger_path)
+            log_obj(f'{i}/{len(urls)} Received new Youtube URL'.ljust(print_space), url)
+            match_url_to_spotify(url, logger=log_obj, default_response=default_response)
+        start_daemon()
+
+# os.system(f'sudo su plex -s /bin/bash')
+# We will want to use the API for scanning:
+# http://192.168.2.1:32400/library/sections/6/refresh?path=/srv/dev-disk-by-uuid-1806e0be-96d7-481c-afaa-90a97aca9f92/Plex/Music/Lazzo&X-Plex-Token=QV1zb_72YxRgL3Vv4_Ry
+# print('you might want to run...')
+# print(f"'/usr/lib/plexmediaserver/Plex\ Media\ Scanner --analyze -d '{root}'")
 
 
 if __name__ == '__main__':
     """
     This script takes a YouTube URL, downloads the audio and adds mp3 tag data using the Spotify API
-    
+
     Input:
         Whithout input it will start in Python mode (see below)
         Alternatively any number of Youtube Vidoe URLS or Public Playlist URLs are accepted
@@ -173,14 +194,14 @@ if __name__ == '__main__':
            the background process `get_track.`py` checks if the requested YouTube URL is already
            in the song data base, and if so, will not initiate the semi-automatic matching process,
            (`spotify_lookup`) but the downloading process described above (`pull_song`).
-    
+
     Modes:
         This script can be run in Python mode, or Bash mode.
         In Python mode, you provide the URLs within Python using the `input` function, which can
         perform string sanitation. It then forwards the request to the Bash mode.
         In Bash mode you can directly send a URL to be processed. Just make sure the string has
         been sanitized (so no "&" symbols).
-    
+
     Copyright and use:
         Audio you download using this script can not contain third-party intellectual property
         (such as copyrighted material) unless you have permission from that party or are otherwise 
@@ -193,37 +214,12 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:  # No URL provided, run in Python mode
         while True:
             # TODO Allow for multiple arguments: default response value
-            yt_url = input('YouTube URL or [Abort]?'.ljust(print_space))
-            if not yt_url or input_is('Abort', yt_url):
+            input_url = input('YouTube URL or [Abort]?'.ljust(print_space))
+            if not input_url or input_is('Abort', input_url):
                 print('Bye Bye!')
                 sys.exit()
-            yt_url = yt_url.split('&')[0]
-            os.system(f'sudo python main.py {yt_url}')
-    else:  # One or more URLs provided, 
-        # Get the YouTube URI
-        yt_urls = sys.argv[1:]
-        song_db = get_song_db()
-        for i, yt_url in enumerate(yt_urls):
-            log_obj = Logger(yt_url, owner='get_track')
-            if 'playlist' in yt_url:
-                playlist_urls = pytube.Playlist(yt_url)
-                do_playlist = input(f'Received playlist with {len(playlist_urls)} items. Proceed? [Yes]/No  ')
-                if input_is('No', do_playlist):
-                    print('Playlist skipped.')
-                    continue
-                elif input_is('Yes', do_playlist) or not do_playlist:
-                    os.system(f'sudo nice -n 1 python main.py {" ".join(playlist_urls)}')
-                else:
-                    print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
-            elif yt_url in song_db:
-                if song_db[yt_url] is not None:
-                    yt_download(yt_url, logger=log_obj)
             else:
-                log_obj(f'{i}/{len(yt_urls)} Received new Youtube URL'.ljust(print_space), yt_url)
-                match_url_to_spotify(yt_url, logger=log_obj)
-
-# os.system(f'sudo su plex -s /bin/bash')
-# We will want to use the API for scanning:
-# http://192.168.2.1:32400/library/sections/6/refresh?path=/srv/dev-disk-by-uuid-1806e0be-96d7-481c-afaa-90a97aca9f92/Plex/Music/Lazzo&X-Plex-Token=QV1zb_72YxRgL3Vv4_Ry
-# print('you might want to run...')
-# print(f"'/usr/lib/plexmediaserver/Plex\ Media\ Scanner --analyze -d '{root}'")
+                init_matching(*input_url.split(' '))
+    else:
+        urls = sys.argv[1:]
+        init_matching(*urls)

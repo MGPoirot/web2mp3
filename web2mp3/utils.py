@@ -1,31 +1,45 @@
+from dotenv import load_dotenv
+load_dotenv()
 import pickle
 from spotipy.oauth2 import SpotifyClientCredentials
+from contextlib import contextmanager
 import os
 import inspect
 from datetime import datetime
 import spotipy
 import eyed3
 import json
+import sys
 
 
-data_dir = r'/srv/dev-disk-by-uuid-1806e0be-96d7-481c-afaa-90a97aca9f92/Plex/' if os.name == 'posix' else os.getcwd()
-eyed3.log.setLevel("ERROR")
-print_space = 24
-spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+def get_url_domain(track_url: str) -> str:
+    # return 'soundcloud'
+    # return 'spotify'
+    return 'youtube'
+
+
+def shorten_url(url: str) -> str:
+    if '=' in url:
+        url = url.split('=')[1] if '=' in url else url
+    else:
+        url = url.split('/')[-1]
+    return url.split('&')[0]
 
 
 class Logger:
-    def __init__(self, url: str, owner='get_track', verbose=False):
-        if '=' in url:
-            url = url.split('=')[1]
-            if '&' in url:
-                url = url.split('&')[0]
-        else:
-            url = url.split('/')[-1]  # short notation
+    def __init__(self, full_path=None, verbose=False):
+        """
+        Except from verbose, all arguments are used to contruct a path. Two options:
+        1. full_path
+        2. os.getcwd()/logdir-[OWNER]/URL.json
+        """
 
-        self.key = url
-        self.path = os.path.join(os.getcwd(), 'logdir-' + owner, url + '.json')
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        self.path = full_path
+        try:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        except OSError:
+            raise OSError(f'Not a valid path: "{self.path}"')
+            sys.exit()
         self.verbose = verbose  # Always print if true
 
         if not os.path.isfile(self.path):
@@ -56,11 +70,18 @@ class Logger:
     def close(self):
         self(datetime.now().strftime("%Y-%m-%d %H:%M"))
 
+    def rm(self):
+        if os.path.isfile(self.path):
+            os.remove(self.path)
+
 
 def free_folder(directory: str, owner='pi', logger=print):
+    # As long as you do not run the command as sudo, you should not end up with ownership issues
     """ Clear any access restrictions and set owner """
     os.system(f"sudo chmod 777 -R '{directory}'")
     os.system(f"sudo chown -R {owner}:{owner} '{directory}'")
+    #os.chmod(file, 0o0777)
+    #os.chown(file, pwd.getpwnam('plex').pw_uid, )
     logger(f'Rights set to rwxrwsrwx and owner to {owner} for "{directory}"')
 
 
@@ -112,3 +133,14 @@ def rm_char(text: str) -> str:
     for char in '.#%&{}\<>*?/$!":@|`|=\'':
         text = text.replace(char, '')
     return text
+
+
+data_dir = r'/srv/dev-disk-by-uuid-1806e0be-96d7-481c-afaa-90a97aca9f92/Plex/' if os.name == 'posix' else r'C:\Users\mpoir\Music'
+data_dir = os.path.join(data_dir)
+daemon_dir = os.path.join(os.getcwd(), '.daemons', 'daemon-{}.tmp')
+log_dir = os.path.join(os.getcwd(), '.logs', '{}.json')
+song_db_file = os.path.join(os.getcwd(), 'song_db.pkl')
+eyed3.log.setLevel("ERROR")
+print_space = 24
+spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+max_daemons = 2
