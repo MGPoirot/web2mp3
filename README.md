@@ -34,7 +34,7 @@ currently only YouTube, but I'll add soundcloud soon
 
 # Backbone
 
-Uses `yt-dlp` to download audio and `spotipy` for meta data.
+Starts with `youtube_search_python` to identify the video with the given URL. Then uses `spotipy` to get meta data. After which it uses `yt-dlp` to download audio, and finally `eye3d` for handling mp3 tags. `pytube` is optional to get a list of URLS from a playlist.
 
 ## Use agreement
 
