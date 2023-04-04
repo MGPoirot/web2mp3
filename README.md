@@ -26,7 +26,7 @@ This identifies the song and takes about 1 second, after which you can provide a
 * provide playlists: `main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
 * privode multiple urls, separated by spaces
 
-In the background, audio is downloaded, and mp3 tags are applied.
+In the background, audio is downloaded using a daemon, and mp3 tags are applied.
 
 ## Supported platforms
 
@@ -38,7 +38,6 @@ Starts with `youtube_search_python` to identify the video with the given URL. Th
 
 Tested on Linux and Windows.
 
-## Use agreement
-
-Not to be used to download copyrighted audio.
+## Copyright and use
+Audio you download using this script can not contain third-party intellectual property (such as copyrighted material) unless you have permission from that party or are otherwise legally entitled to do so (including by way of any available exceptions or limitations to copyright or related rights provided for in European Union law). You are legally responsible for the Content you submit to the Service.     
 
