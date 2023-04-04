@@ -31,7 +31,7 @@ Currently only YouTube, but I'll add SoundCloud soon.
 
 ## Directory structuring
 
-Directory structure follows the recommendation by Plex Media Server:<sup>[1](Music/Artist_Name/Album_Name/Track_Filename - Descriptive_Name-Video_Type.ext)</sup>
+Directory structure follows the recommendation by Plex Media Server:<sup>[1](https://support.plex.tv/articles/205568377-adding-local-artist-and-music-videos/)</sup>
 
 ```
 Music
@@ -52,3 +52,4 @@ Tested on Linux and Windows.
 ## Copyright and use
 Audio you download using this script can not contain third-party intellectual property (such as copyrighted material) unless you have permission from that party or are otherwise legally entitled to do so (including by way of any available exceptions or limitations to copyright or related rights provided for in European Union law). You are legally responsible for the Content you submit to the Service.     
 
+1. 
