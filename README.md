@@ -1,6 +1,6 @@
 # Web2mp3 - Music Download CLI
 
-A scalable command line interface to download music from the internet with proper mp3 tagging, proper directory structuring.
+A scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
 ## How to use
 
 Easies is calling `python main.py`:
@@ -28,6 +28,20 @@ The following should take about a second, since afterwards, in the background, a
 ## Supported platforms
 
 Currently only YouTube, but I'll add SoundCloud soon.
+
+## Directory structuring
+
+Directory structure follows the recommendation by Plex Media Server:<sup>[1](Music/Artist_Name/Album_Name/Track_Filename - Descriptive_Name-Video_Type.ext)</sup>
+
+```
+Music
+└───Album Artist
+    └───Album Name├
+        ├───1 - Track Name.mp3
+        └───folder.jpg
+```
+
+
 
 ## Backbone
 
