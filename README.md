@@ -1,10 +1,6 @@
 # Web2mp3 - Music Download CLI
 
-Command line interface to download music from the internet
-1. with proper mp3 tagging
-2. with proper ordering
-3. able to download large scale
-
+A scalable command line interface to download music from the internet with proper mp3 tagging, proper directory structuring.
 ## How to use
 
 Easies is calling `python main.py`:
