@@ -1,4 +1,4 @@
-<center>Web2mp3 - Music Download CLI</center>
+# Web2mp3 - Music Download CLI
 
 Command line interface to download audio from the internet:
 
@@ -31,6 +31,10 @@ In the background, audio is downloaded, and mp3 tags are applied.
 ## Supported platforms
 
 currently only YouTube, but I'll add soundcloud soon
+
+# Backbone
+
+Uses `yt-dlp` to download audio and `spotipy` for meta data.
 
 ## Use agreement
 
