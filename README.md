@@ -1,16 +1,15 @@
 # Web2mp3 - Music Download CLI
 
-Command line interface to download audio from the internet:
-
+Command line interface to download music from the internet
 1. with proper mp3 tagging
 2. with proper ordering
 3. able to download large scale
 
 ## How to use
 
-After `python main.py` the interface is as follows:
+Easies is calling `python main.py`:
 
-```
+```python
 YouTube URL or [Abort]? https://www.youtube.com/watch?v=NgE5mEQiizQ
 Searching Spotify for    "Dirty South Hip Hop (feat. #1 Southern Hip Hop Music Instrumental) - Royalty Free Music - Topic"
                          1) Dirty South - PANDSHAFT
@@ -20,17 +19,19 @@ Clear Spotify match      Dirty South Hip Hop (feat. #1 Southern Hip Hop Music In
 YouTube URL or [Abort]?
 ```
 
-This identifies the song and takes about 1 second, after which you can provide a new url. You can also:
+The following should take about a second, since afterwards, in the background, audio is downloaded using a daemon, and mp3 tags are applied.
 
-* call the function straight from CLI: `main.py https://www.youtube.com/watch?v=NgE5mEQiizQ`
-* provide playlists: `main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
-* privode multiple urls, separated by spaces
+**Alternative input options**
 
-In the background, audio is downloaded using a daemon, and mp3 tags are applied.
+* Call the function straight from CLI: `main.py https://www.youtube.com/watch?v=NgE5mEQiizQ`
+* Provide playlists: `main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
+* Provide multiple URLs, separated by spaces
+
+
 
 ## Supported platforms
 
-currently only YouTube, but I'll add soundcloud soon
+Currently only YouTube, but I'll add SoundCloud soon.
 
 ## Backbone
 
