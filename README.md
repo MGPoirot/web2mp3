@@ -1,4 +1,12 @@
-Download audio from the internet with proper mp3 tagging. 
+<center>Web2mp3 - Music Download CLI</center>
+
+Command line interface to download audio from the internet:
+
+1. with proper mp3 tagging
+2. with proper ordering
+3. able to download large scale
+
+## How to use
 
 After `python main.py` the interface is as follows:
 
@@ -20,4 +28,11 @@ This identifies the song and takes about 1 second, after which you can provide a
 
 In the background, audio is downloaded, and mp3 tags are applied.
 
-For to be used to download copyrighted audio.
+## Supported platforms
+
+currently only YouTube, but I'll add soundcloud soon
+
+## Use agreement
+
+Not to be used to download copyrighted audio.
+
