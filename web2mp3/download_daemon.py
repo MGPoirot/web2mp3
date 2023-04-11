@@ -17,12 +17,17 @@ def download_track(track_url: str, logger=print):
     :param logger:
     :return: Does not return anything
     """
+    logger('Started download_track')
+
     # Retrieve and extract song properties from the song database
     mp3_tags = get_song_db()[track_url]
     artist_p, album_p, track_p = [rm_char(f) for f in (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
 
     # Check if this song is already available, maybe in a different album
     existing_tracks = glob(os.path.join(data_dir, 'Music', artist_p, '*', f'*{track_p}.mp3'))
+    # TODO: This checking is not very robust
+    existing_tracks.extend(glob(os.path.join(data_dir, 'Music', artist_p, '*', f'*{track_p.replace(" ","_")}.mp3')))
+
     if any(existing_tracks):
         logger('FileExistsWarning:')
         for et in existing_tracks:
@@ -68,18 +73,27 @@ def download_track(track_url: str, logger=print):
         # Set file tags
         set_file_tags(mp3_tags, mp3_fname, audio_source_url=track_url, logger=logger)
 
-        # Finish
-        logger('main.py finished successfully')
-
+        # Potentially fix permissions
+        for restricted_path in (album_dir, mp3_fname, cov_fname):
+            os.chmod(restricted_path, 0o0777)  # TODO: set proper file permissions! 755
+        logger('File permissions set.')
+    
+    # Clear song_db
     set_song_db(track_url, None)
     logger('Song data base value cleared to None.')
+
+    # Finish
+    logger('daemon_download.py finished successfully')
 
 
 def syscall():
     # believe it or not, this does make a difference compared to
     # - not the call
     # - assigning a lambda function
-    os.system(f'pythonw download_daemon.py &')
+    if os.name == 'posix':
+        os.system(f'python download_daemon.py &')
+    else:
+        os.system(f'pythonw download_daemon.py')
 
 
 def start_daemon():
@@ -90,26 +104,25 @@ def start_daemon():
     return
 
 
-def u2t(t: str) -> str:
-    return daemon_dir.format(f'{daemon_n}_{shorten_url(t)}')
+def u2t(n, t: str) -> str: 
+    return daemon_dir.format(f'{n}_{shorten_url(t)}')
 
 
 if __name__ == '__main__':
     daemon_n = len(glob(daemon_dir.format('[0-9]')))
     daemon_tmp = Logger(daemon_dir.format(daemon_n))
     atexit.register(daemon_tmp.rm)
-
     tried = []
     while True:
         song_db = get_song_db()
         daemon_files = glob(daemon_dir.format('*'))
         urls = [u for u, tags in song_db.items() if tags is not None]  # exclude finished
-        urls = [u for u in urls if not any([u2t(d) in d for d in daemon_files])]  # exclude busy
+        urls = [u for u in urls if not any(glob(u2t('*', u)))]  # exclude busy
         urls = [u for u in urls if not u in tried]  # prevent potential inf while
         if any(urls):
             task = urls[0]
             tried.append(task)
-            task_tmp = Logger(u2t(task))
+            task_tmp = Logger(u2t(daemon_n, task))
             atexit.register(task_tmp.rm)
             logger_path = log_dir.format(shorten_url(task))
             sys.stdout = open(logger_path.replace('json', 'txt'), "w")
