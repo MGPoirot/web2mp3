@@ -1,11 +1,11 @@
-from utils import print_space, input_is, Logger
+from utils import print_space, input_is, Logger, hms2s
 from youtubesearchpython import VideosSearch
 import os
 import sys
 import yt_dlp
 
 
-def url2title(youtube_url: str, logger: Logger) -> str:
+def get_description(youtube_url: str, logger: Logger) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
     :param logger:
@@ -18,11 +18,14 @@ def url2title(youtube_url: str, logger: Logger) -> str:
     if not any(yt_search_result['result']):
         logger(f'ValueError: No video found for "{youtube_url}"', verbose=True)
         return None
-    video_title = yt_search_result['result'][0]['title']
-    uploader_id = yt_search_result['result'][0]['channel']['name']
+    else:
+        yt_search_result = yt_search_result['result'][0]
+    youtube_duration = hms2s(yt_search_result['duration'])
+    video_title = yt_search_result['title']
+    uploader_id = yt_search_result['channel']['name']
     if uploader_id not in video_title:
         video_title += f' - {uploader_id}'
-    return video_title
+    return video_title, youtube_duration
 
 
 def audio_download(youtube_url: str, audio_fname: str, logger=print):
