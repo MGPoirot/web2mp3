@@ -4,40 +4,48 @@ from datetime import datetime
 import eyed3
 import requests
 import shutil
+from time import sleep
+from utils import Logger
 
 
-def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
+def get_track_tags(track_item: dict, logger: Logger, do_light=False) -> pd.Series:
     # in do_light mode we only get title, album and artist information; just enough to do matching.
-    try:
-        tag_dict = {
-            'title': track_item['name'],
-            'album': track_item['album']['name'],
-            'album_artist': track_item['album']['artists'][0]['name'],
-        }
-    except:
-        # TODO: add requests_timeout parameter
-        print('get_track_tags might be hit by Spotify throttling in Light mode.')
-        return None
-    try:
-        if not do_light:
-            features = spotify.audio_features(track_item['uri'])[0]
-            if features is not None:
-                tag_dict.update({
-                    'bpm':                  int(features['tempo']),
-                    'artist':               '; '.join([a['name'] for a in track_item['artists']]),
-                    'internet_radio_url':   track_item['uri'],
-                    'cover':                track_item['album']['images'][0]['url'],
-                    'disc_num':             spotify.track(track_item['uri'])['disc_number'],
-                    'genre':                '; '.join(flatten([spotify.artist(a['uri'])['genres'] for a in track_item['artists']])),
-                    'release_date':         track_item['album']['release_date'],
-                    'recording_date':       track_item['album']['release_date'],
-                    'tagging_date':         datetime.now().strftime('%Y-%m-%d'),
-                    'track_num':            track_item['track_number'],
-                })
-    except:
-        # TODO: Add requests_timeout parameter
-        print('get_track_tags might be hit by Spotify throtteling in Heavy mode.')
-        return None
+    read_timeout = False
+
+    tag_dict = {
+        'title': track_item['name'],
+        'album': track_item['album']['name'],
+        'album_artist': track_item['album']['artists'][0]['name'],
+    }
+    if not do_light:
+        while True:
+            try:
+                features = spotify.audio_features(track_item['uri'])[0]
+                break
+            except KeyboardInterrupt:
+                print('KeyboardInterrupt')
+                return
+            except TimeoutError:
+                if not read_timeout:
+                    read_timeout = True
+                    logger('get_track_tags encountered a SpotiPy API ReadTimeout error', verbose=True)
+                    sleep(2)
+                else:
+                    logger('get_track_tags failed after a SpotiPy API ReadTimeout error', verbose=True)
+                    return
+        if features is not None:
+            tag_dict.update({
+                'bpm': int(features['tempo']),
+                'artist': '; '.join([a['name'] for a in track_item['artists']]),
+                'internet_radio_url': track_item['uri'],
+                'cover': track_item['album']['images'][0]['url'],
+                'disc_num': spotify.track(track_item['uri'])['disc_number'],
+                'genre': '; '.join(flatten([spotify.artist(a['uri'])['genres'] for a in track_item['artists']])),
+                'release_date': track_item['album']['release_date'],
+                'recording_date': track_item['album']['release_date'],
+                'tagging_date': datetime.now().strftime('%Y-%m-%d'),
+                'track_num': track_item['track_number'],
+            })
     tag_series = pd.Series(tag_dict)
     return tag_series
 

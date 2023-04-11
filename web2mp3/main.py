@@ -1,20 +1,27 @@
-import os
-
 import sys
 import pandas as pd
 import pytube
 from time import sleep
-from utils import print_space, spotify, Logger, input_is, get_url_domain, log_dir, shorten_url
+from utils import print_space, spotify, Logger, input_is, get_url_domain, log_dir, shorten_url, hms2s
 from tag_manager import get_track_tags, manual_track_tags
 import youtube
 import soundcloud
 from song_db import set_song_db, get_song_db
 from download_daemon import start_daemon
+from youtubesearchpython import VideosSearch
 
 
-def spotify_lookup(spotify_query: str, logger: Logger, market='NL', default_response=None) -> pd.Series:
+
+def is_clear_match(track_name, artist_name, title):
+    if track_name.lower() in title.lower() and artist_name.lower() in title.lower():
+        return True
+    else:
+        return False
+
+
+def spotify_lookup(spotify_query: str, audio_duration: int, logger: Logger, duration_mismatch=0.10,
+                   market='NL', default_response=None, search_limit=5) -> pd.Series:
     accept_origin = 'the user' if default_response is None else 'default'
-    search_limit = 5
     if isinstance(default_response, str):
         if default_response.isdigit():
             search_limit = int(default_response)
@@ -24,28 +31,37 @@ def spotify_lookup(spotify_query: str, logger: Logger, market='NL', default_resp
         logger('Searching Spotify for'.ljust(print_space), f'"{spotify_query}"', verbose=True)
         
         results = None
-        are_screwed_over = False
+        read_timeout = False
+
         while results is None:
             try:
                 results = spotify.search(q=spotify_query, market=market, limit=search_limit, type='track')
             except KeyboardInterrupt:
                 return
-            except TimeoutError:
-                if not are_screwed_over:
-                    # TODO: Add requests_timeout parameter
-                    logger('We are being screwed over by SpotiPy throtteling...', verbose=True)
-                    are_screwed_over = True
+            except TimeoutError:  # Handling requests.exceptions.ReadTimeout errors from the spotify server
+                if not read_timeout:
+                    logger('spotify_lookup encountered a SpotiPy API ReadTimeout error', verbose=True)
+                    read_timeout = True
+                else:
+                    logger('spotify_lookup failed after a SpotiPy API ReadTimeout error', verbose=True)
+                    return
                 sleep(2)
                 pass
 
         items = results['tracks']['items']
         for n, item in enumerate(items, 1):
-            t = get_track_tags(item, do_light=True)
+            t = get_track_tags(item, logger=logger, do_light=True)
+            spotify_duration = item['duration_ms'] / 1000
+            relative_duration = audio_duration / spotify_duration
+            if abs(relative_duration - 1) > duration_mismatch:
+                logger(f'Audio duration mismatch: {relative_duration:.1%} (YT/Sp)')
+                continue
             logger(''.rjust(print_space), f'{n}) {t.title} - {t.album_artist}', verbose=True)
             # Check if the search result is a match
-            if t.title.lower() in spotify_query.lower() and t.album_artist.lower() in spotify_query.lower():
-                t = get_track_tags(item, do_light=False)
-                logger('Clear Spotify match'.ljust(print_space), f'{t.title} - {t.album} - {t.album_artist}', verbose=True)
+            if is_clear_match(t.title, t.album_artist, spotify_query):
+                t = get_track_tags(item, logger=logger, do_light=False)
+                logger('Clear Spotify match'.ljust(print_space),
+                       f'{t.title} - {t.album} - {t.album_artist}', verbose=True)
                 return t
 
         # Without clear match provide the user with four options:
@@ -64,8 +80,9 @@ def spotify_lookup(spotify_query: str, logger: Logger, market='NL', default_resp
 
         # Take action according to user input
         if proceed.isdigit():
-            t = get_track_tags(items[int(proceed) - 1], do_light=False)
-            logger(f'Match accepted by {accept_origin}'.ljust(print_space), f'{t.title} - {t.album} - {t.album_artist}', verbose=True)
+            t = get_track_tags(items[int(proceed) - 1], logger=logger, do_light=False)
+            logger(f'Match accepted by {accept_origin}'.ljust(print_space),
+                   f'{t.title} - {t.album} - {t.album_artist}', verbose=True)
             return t
         elif input_is('Retry', proceed):
             logger('Provide new info for Spotify query', verbose=True)
@@ -80,42 +97,64 @@ def spotify_lookup(spotify_query: str, logger: Logger, market='NL', default_resp
         elif input_is('Change market', proceed):
             new_market = input('>> Market code?'.ljust(print_space)) or None
             logger('Market changed to:'.ljust(print_space), verbose=True)
-            return spotify_lookup(spotify_query, market=new_market, logger=logger, default_response=default_response)
+            return spotify_lookup(spotify_query, audio_duration, logger, duration_mismatch,
+                                  new_market, default_response, search_limit)
         else:
             logger(f'Invalid input "{proceed}"')
             if default_response is not None:
                 return
 
 
-def match_url_to_spotify(track_url: str, logger: Logger, market='NL', default_response=None):
+def youtube_lookup(track_tags: pd.Series, audio_duration: float, logger: Logger, duration_mismatch=0.1,
+                   default_response=None, search_limit=5):
+    youtube_query = f'{track_tags.title} - {track_tags.artist}'
+    logger('Searching YouTube for'.ljust(print_space), youtube_query, verbose=True)
+    yt_search_result = VideosSearch(youtube_query, limit=search_limit).result()['result']
+    youtube_url = None
+    for search_result in yt_search_result:
+        youtube_duration = hms2s(search_result['duration'])
+        relative_duration = youtube_duration / audio_duration
+        print(relative_duration)
+        if abs(relative_duration - 1) > duration_mismatch:
+            logger(f'Audio duration mismatch: {relative_duration:.1%} (YT/Sp)')
+            continue
+
+        elif is_clear_match(track_tags.title, track_tags.album_artist, search_result['title']):
+            logger('Clear YouTube match'.ljust(print_space), search_result['title'], verbose=True)
+            youtube_url = search_result['link']
+            break
+    if youtube_url is None:
+        # TODO: Implement a semi-automatic oversight just as nice as for youtube
+        logger(f'No YouTube video matched Spotify "{youtube_query}".', verbose=True)
+        return
+    return youtube_url
+
+
+def match_audio_with_tags(track_url: str, logger: Logger, market='NL', default_response=None, search_limit=5, duration_mismatch=0.1):
     """
     This function matches a given YouTube URL, and writes what it found to the song database,
     after which it calls this function again, but as a background process, and finishes.
     """
-    # TODO: implement test if the URL is a YouTube or any other URL
     url_domain = get_url_domain(track_url)
-
-    module = False
-    if url_domain == 'youtube':
-        module = youtube
-    elif url_domain == 'soundcloud':
-        module = soundcloud
-    elif url_domain == 'spotify':
-        item = spotify.track(track_url, market=market)[0]
-        track_tags = get_track_tags(item, do_light=False)
-        # TODO: implement a YouTube lookup, and call pull_song with the YouTube URL
-        pass
+    if url_domain == 'spotify':
+        item = spotify.track(track_url, market=market)
+        spotify_duration = item['duration_ms'] / 1000
+        track_tags = get_track_tags(item, logger=logger, do_light=False)
+        youtube_url = youtube_lookup(track_tags, spotify_duration, logger, duration_mismatch, default_response, search_limit)
+        track_url = youtube_url
     else:
-        raise ValueError(f'Unrecognized URL type: "{url_domain}"')
-
-    if module:
+        if url_domain == 'youtube':
+            module = youtube
+        elif url_domain == 'soundcloud':
+            module = soundcloud
         # Find match
-        sp_query = module.url2title(track_url, logger=logger)
+        sp_query, audio_duration = module.get_description(track_url, logger)
         if sp_query is None:
             logger(f'Lookup of a "{url_domain}" URL did not return a query for Spotify.')
             return
 
-        track_tags = spotify_lookup(sp_query, logger=logger, default_response=default_response)
+        track_tags = spotify_lookup(sp_query, audio_duration, logger, default_response=default_response,
+                                    search_limit=search_limit)
         if track_tags is None:
             logger('Spotify lookup did not return a dict of tags')
             return
@@ -130,12 +169,15 @@ def match_url_to_spotify(track_url: str, logger: Logger, market='NL', default_re
 
 def init_matching(*urls, default_response=None):
     for i, url in enumerate(urls):
-        if url in get_song_db():
-            continue
-
         url = url.split('&')[0]
+        # identiy the domain
+        domain = get_url_domain(url)
         if 'playlist' in url:
-            playlist_urls = pytube.Playlist(url)
+            if domain == 'youtube':
+                playlist_urls = pytube.Playlist(url)
+            elif domain == 'spotify':
+                playlist_items = spotify.playlist(url.split('/')[-1])['tracks']['items']
+                playlist_urls = [f"https://open.spotify.com/track/{t['track']['id']}" for t in playlist_items]
             do_playlist = input(f'Received playlist with {len(playlist_urls)} items. Proceed? [Yes]/No  '.ljust(print_space))
             if input_is('No', do_playlist):
                 print('Playlist skipped.')
@@ -153,10 +195,12 @@ def init_matching(*urls, default_response=None):
             else:
                 print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
         else:
+            if url in get_song_db():
+                continue
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
-            log_obj(f'{i}/{len(urls)} Received new Youtube URL'.ljust(print_space), url)
-            match_url_to_spotify(url, logger=log_obj, default_response=default_response)
+            log_obj(f'{i}/{len(urls)} Received new {domain} URL'.ljust(print_space), url)
+            match_audio_with_tags(url, logger=log_obj, default_response=default_response)
         start_daemon()
 
 # os.system(f'sudo su plex -s /bin/bash')
@@ -214,7 +258,7 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:  # No URL provided, run in Python mode
         while True:
             # TODO Allow for multiple arguments: default response value
-            input_url = input('YouTube URL or [Abort]?'.ljust(print_space))
+            input_url = input('URL or [Abort]?'.ljust(print_space))
             if not input_url or input_is('Abort', input_url):
                 print('Bye Bye!')
                 sys.exit()

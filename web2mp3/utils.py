@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import pickle
 from spotipy.oauth2 import SpotifyClientCredentials
-from contextlib import contextmanager
+# from contextlib import contextmanager
 import os
 import inspect
 from datetime import datetime
@@ -12,10 +12,21 @@ import json
 import sys
 
 
+def hms2s(hhmmss: str) -> int:
+    components = hhmmss.split(':')
+    components.reverse()
+    return sum([int(value) * multiplier for value, multiplier in zip(components, (1, 60, 3600))])
+
+
 def get_url_domain(track_url: str) -> str:
-    # return 'soundcloud'
-    # return 'spotify'
-    return 'youtube'
+    patterns = {'open.spotify.com': 'spotify',
+                'youtube.com':      'youtube',
+                'soundcloud.com':   'soundcloud',
+                'youtu.be':         'youtube'}
+    for pattern, domain in patterns.items():
+        if pattern in track_url:
+            return domain
+    raise KeyError(f'No pattern found in "{track_url}".\nKnown patterns: {"; ".join(patterns)}')
 
 
 def shorten_url(url: str) -> str:
