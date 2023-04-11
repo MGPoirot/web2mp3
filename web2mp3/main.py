@@ -11,7 +11,6 @@ from download_daemon import start_daemon
 from youtubesearchpython import VideosSearch
 
 
-
 def is_clear_match(track_name, artist_name, title):
     if track_name.lower() in title.lower() and artist_name.lower() in title.lower():
         return True
@@ -19,7 +18,7 @@ def is_clear_match(track_name, artist_name, title):
         return False
 
 
-def spotify_lookup(spotify_query: str, audio_duration: int, logger: Logger, duration_mismatch=0.10,
+def spotify_lookup(spotify_query: str, audio_duration: int, logger: Logger, duration_tolerance=0.05,
                    market='NL', default_response=None, search_limit=5) -> pd.Series:
     accept_origin = 'the user' if default_response is None else 'default'
     if isinstance(default_response, str):
@@ -53,7 +52,7 @@ def spotify_lookup(spotify_query: str, audio_duration: int, logger: Logger, dura
             t = get_track_tags(item, logger=logger, do_light=True)
             spotify_duration = item['duration_ms'] / 1000
             relative_duration = audio_duration / spotify_duration
-            if abs(relative_duration - 1) > duration_mismatch:
+            if abs(relative_duration - 1) > duration_tolerance:
                 logger(f'Audio duration mismatch: {relative_duration:.1%} (YT/Sp)')
                 continue
             logger(''.rjust(print_space), f'{n}) {t.title} - {t.album_artist}', verbose=True)
@@ -97,7 +96,7 @@ def spotify_lookup(spotify_query: str, audio_duration: int, logger: Logger, dura
         elif input_is('Change market', proceed):
             new_market = input('>> Market code?'.ljust(print_space)) or None
             logger('Market changed to:'.ljust(print_space), verbose=True)
-            return spotify_lookup(spotify_query, audio_duration, logger, duration_mismatch,
+            return spotify_lookup(spotify_query, audio_duration, logger, duration_tolerance,
                                   new_market, default_response, search_limit)
         else:
             logger(f'Invalid input "{proceed}"')
@@ -105,7 +104,7 @@ def spotify_lookup(spotify_query: str, audio_duration: int, logger: Logger, dura
                 return
 
 
-def youtube_lookup(track_tags: pd.Series, audio_duration: float, logger: Logger, duration_mismatch=0.1,
+def youtube_lookup(track_tags: pd.Series, audio_duration: float, logger: Logger, duration_tolerance=0.05,
                    default_response=None, search_limit=5):
     youtube_query = f'{track_tags.title} - {track_tags.artist}'
     logger('Searching YouTube for'.ljust(print_space), youtube_query, verbose=True)
@@ -114,8 +113,7 @@ def youtube_lookup(track_tags: pd.Series, audio_duration: float, logger: Logger,
     for search_result in yt_search_result:
         youtube_duration = hms2s(search_result['duration'])
         relative_duration = youtube_duration / audio_duration
-        print(relative_duration)
-        if abs(relative_duration - 1) > duration_mismatch:
+        if abs(relative_duration - 1) > duration_tolerance:
             logger(f'Audio duration mismatch: {relative_duration:.1%} (YT/Sp)')
             continue
 
@@ -123,14 +121,10 @@ def youtube_lookup(track_tags: pd.Series, audio_duration: float, logger: Logger,
             logger('Clear YouTube match'.ljust(print_space), search_result['title'], verbose=True)
             youtube_url = search_result['link']
             break
-    if youtube_url is None:
-        # TODO: Implement a semi-automatic oversight just as nice as for youtube
-        logger(f'No YouTube video matched Spotify "{youtube_query}".', verbose=True)
-        return
     return youtube_url
 
 
-def match_audio_with_tags(track_url: str, logger: Logger, market='NL', default_response=None, search_limit=5, duration_mismatch=0.1):
+def match_audio_with_tags(track_url: str, logger: Logger, market='NL', default_response=None, search_limit=5, duration_tolerance=0.05):
     """
     This function matches a given YouTube URL, and writes what it found to the song database,
     after which it calls this function again, but as a background process, and finishes.
@@ -140,7 +134,7 @@ def match_audio_with_tags(track_url: str, logger: Logger, market='NL', default_r
         item = spotify.track(track_url, market=market)
         spotify_duration = item['duration_ms'] / 1000
         track_tags = get_track_tags(item, logger=logger, do_light=False)
-        youtube_url = youtube_lookup(track_tags, spotify_duration, logger, duration_mismatch, default_response, search_limit)
+        youtube_url = youtube_lookup(track_tags, spotify_duration, logger, duration_tolerance, default_response, search_limit)
         track_url = youtube_url
     else:
         if url_domain == 'youtube':
@@ -155,13 +149,16 @@ def match_audio_with_tags(track_url: str, logger: Logger, market='NL', default_r
 
         track_tags = spotify_lookup(sp_query, audio_duration, logger, default_response=default_response,
                                     search_limit=search_limit)
-        if track_tags is None:
-            logger('Spotify lookup did not return a dict of tags')
-            return
+    if track_tags is None:
+        logger('Failed to produce dict of tags from Spotify lookup.\n', verbose=True)
+        return
+    elif track_url is None:
+        logger(f'Failed to match YouTube video to Spotify query.\n', verbose=True)
+        return
 
     # Write match to song database entry
     set_song_db(track_url, track_tags)
-    logger('Created Song DB entry')
+    logger('Successfully Created Song DB entry.\n', verbose=True)
     
     # Commence background process
     return
