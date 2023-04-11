@@ -3,31 +3,45 @@
 A scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
 ## How to use
 
-Easiest is calling `python main.py`:
+**Python Wizard**
+
+Easiest is calling `python main.py` which will start the Python Wizard that will help you provide input:
 
 ```python
-YouTube URL or [Abort]? https://www.youtube.com/watch?v=NgE5mEQiizQ
-Searching Spotify for    "Dirty South Hip Hop (feat. #1 Southern Hip Hop Music Instrumental) - Royalty Free Music - Topic"
+URL or [Abort]?          https://www.youtube.com/watch?v=NgE5mEQiizQ
+Searching Spotify for    Dirty South Hip Hop - Royalty Free Music - Topic
                          1) Dirty South - PANDSHAFT
-                         2) Dirty South Hip Hop (feat. #1 Southern Hip Hop Music Instrumental) - Royalty Free Music
-Clear Spotify match      Dirty South Hip Hop (feat. #1 Southern Hip Hop Music Instrumental) - Royalty Free Music Instrumentals and Horror Soundscapes - Royalty Free Music
+                         2) Dirty South Hip Hop - Royalty Free Music
+Clear Spotify match      Dirty South Hip Hop - Royalty Free Music Instrumentals and Horror Soundscapes - Royalty Free Music
+Successfully Created Song DB entry.
 
-YouTube URL or [Abort]?
+URL or [Abort]?          https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
+Searching YouTube for    Dirty South Hip Hop - Royalty Free Music Instrumentals
+                         1) Dirty South Hip Hop - Royalty Free Music 
+Clear YouTube match      Dirty South Hip Hop - Royalty Free Music
+Successfully Created Song DB entry.
+
+URL or [Abort]?          
 ```
 
-The following should take about a second, since afterwards, in the background, audio is downloaded using a daemon, and mp3 tags are applied.
+Each call to the Wizard should take about a second, since downloading is performed in the background using a daemon, and mp3 tags are applied.
 
-**Alternative input options**
+**Command line calls:**
 
-* Call the function straight from CLI: `main.py https://www.youtube.com/watch?v=NgE5mEQiizQ`
-* Provide playlists: `main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
-* Provide multiple URLs, separated by spaces
+Alternatively you can call the program straight from the command line. The program does not require URL sanitation (although your shell might):
 
-
+* Single track call:
+  * `python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ`
+  * `python main.py https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM`
+* Single playlist call:
+  * `python main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
+  * `python main.py https://open.spotify.com/playlist/37i9dQZF1E4ynkTq5aVuVE`
+* Multiple calls, separated by spaces:
+  * `python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM`
 
 ## Supported platforms
 
-Currently only YouTube, but I'll add SoundCloud soon.
+URLs from YouTube and Spotify are supported. SoundCloud support is coming soon.
 
 ## Directory structuring
 
