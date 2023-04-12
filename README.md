@@ -1,5 +1,5 @@
 # Web2mp3 - Music Download CLI
-![image alt >](/logo.svg) A scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
+[image alt >](/logo.svg) A scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
 ## How to use
 
 **Python Wizard**
