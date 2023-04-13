@@ -2,7 +2,8 @@ import sys
 import pandas as pd
 import pytube
 from time import sleep
-from utils import print_space, spotify, Logger, input_is, get_url_domain, log_dir, shorten_url, hms2s
+from utils import spotify, Logger, input_is, get_url_domain, shorten_url, hms2s, log_dir, settings
+from settings import print_space, default_market, default_tolerance
 from tag_manager import get_track_tags, manual_track_tags
 import youtube
 import soundcloud
@@ -147,7 +148,12 @@ def match_audio_with_tags(track_url: str, logger: Logger, market='NL', default_r
             logger(f'Lookup of a "{url_domain}" URL did not return a query for Spotify.')
             return
 
-        track_tags = spotify_lookup(sp_query, audio_duration, logger, default_response=default_response,
+        track_tags = spotify_lookup(spotify_query=sp_query,
+                                    audio_duration=audio_duration,
+                                    logger=logger,
+                                    duration_tolerance=default_tolerance,
+                                    market=default_market,
+                                    default_response=default_response,
                                     search_limit=search_limit)
     if track_tags is None:
         logger('Failed to produce dict of tags from Spotify lookup.\n', verbose=True)

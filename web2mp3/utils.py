@@ -1,8 +1,6 @@
-from dotenv import load_dotenv
-load_dotenv()
+import dotenv
 import pickle
 from spotipy.oauth2 import SpotifyClientCredentials
-# from contextlib import contextmanager
 import os
 import inspect
 from datetime import datetime
@@ -10,6 +8,8 @@ import spotipy
 import eyed3
 import json
 import sys
+import importlib.machinery
+eyed3.log.setLevel("ERROR")
 
 
 def hms2s(hhmmss: str) -> int:
@@ -146,12 +146,61 @@ def rm_char(text: str) -> str:
     return text
 
 
-data_dir = r'/srv/dev-disk-by-uuid-1806e0be-96d7-481c-afaa-90a97aca9f92/Plex/' if os.name == 'posix' else r'C:\Users\mpoir\Music'
-data_dir = os.path.join(data_dir)
-daemon_dir = os.path.join(os.getcwd(), '.daemons', 'daemon-{}.tmp')
-log_dir = os.path.join(os.getcwd(), '.logs', '{}.json')
-song_db_file = os.path.join(os.getcwd(), 'song_db.pkl')
-eyed3.log.setLevel("ERROR")
-print_space = 24
+if not dotenv.find_dotenv():
+    with open('env', 'w') as fp:
+        pass
+
+
+def get_settings_path():
+    settings_file = 'settings.txt'
+    try:
+        full_settings_file = os.path.join(os.path.dirname(__file__), settings_file)
+    except NameError:
+        full_settings_file = os.path.join(os.getcwd(), settings_file)
+    return full_settings_file
+
+
+def import_settings():
+    return importlib.machinery.SourceFileLoader('settings', get_settings_path()).load_module()
+
+
+def run_setup_wizard():
+    web2mp3home = os.getcwd()
+    music_dir_default = os.path.join(web2mp3home, "Music")
+
+    sp_validator = lambda ans: all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
+    pth_validator = lambda pth: os.path.isdir(os.path.dirname(pth))
+
+    questions = {'HOME_DIR':                ('Web2MP3 home directory',   pth_validator, web2mp3home),
+                 'MUSIC_DIR':               ('Music download directory', pth_validator, music_dir_default),
+                 'SPOTIFY_CLIENT_ID':       ('Spotify client ID',        sp_validator,  None),
+                 'SPOTIFY_CLIENT_SECRET':   ('Spotify client secret',    sp_validator,  None)}
+
+    print(f'                      --- Welcome to Web2MP3 ---                   \n'
+          f'The absence of a .env file indicates that Web2MP3 has not been set up.\n'
+          f'Please provide 4 secrets that will be locally stored in a ".env" file:')
+    for i, (key, (question, validator, default)) in enumerate(questions.items(), 1):
+        while True:
+            q_fmt = f'   {i}. What is your {question}?'
+            d_fmt = f'[{default}]' if default else ''
+            answer = input(f'{q_fmt.ljust(settings.print_space)} {d_fmt}\n')
+            answer = default if not answer and default else answer
+            if validator(answer):
+                with open('.env', 'a') as f:
+                    f.write(f'{key} = {answer}\n')
+                break
+            else:
+                print(f'"{answer}" is not a valid {question}')
+    print('Secrets successfully stored. You are good to go.')
+
+
+settings = import_settings()
+if not dotenv.find_dotenv():
+    run_setup_wizard()
+dotenv.load_dotenv()
+home_dir = os.environ.get("HOME_DIR")
+daemon_dir   = os.path.join(home_dir, '.daemons', 'daemon-{}.tmp')
+log_dir      = os.path.join(home_dir, '.logs', '{}.json')
+song_db_file = os.path.join(home_dir, 'song_db.pkl')
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
-max_daemons = 2
+

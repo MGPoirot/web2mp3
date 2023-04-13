@@ -1,5 +1,6 @@
 import pandas as pd
-from utils import spotify, print_space, input_is, flatten
+from utils import spotify, input_is, flatten, settings
+from settings import print_space
 from datetime import datetime
 import eyed3
 import requests
