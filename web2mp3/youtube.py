@@ -1,4 +1,5 @@
-from utils import print_space, input_is, Logger, hms2s
+from utils import print_space, input_is, Logger, hms2s, settings
+from settings import print_space
 from youtubesearchpython import VideosSearch
 import os
 import sys
