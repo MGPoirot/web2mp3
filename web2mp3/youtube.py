@@ -4,9 +4,9 @@ from youtubesearchpython import VideosSearch
 import os
 import sys
 import yt_dlp
+import pandas as pd
 
-
-def get_description(youtube_url: str, logger: Logger) -> str:
+def get_description(track_url: str, logger: Logger) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
     :param logger:
@@ -15,9 +15,9 @@ def get_description(youtube_url: str, logger: Logger) -> str:
     :return: title as string
     """
     # Get video title
-    yt_search_result = VideosSearch(youtube_url, limit=1).result()
+    yt_search_result = VideosSearch(track_url, limit=1).result()
     if not any(yt_search_result['result']):
-        logger(f'ValueError: No video found for "{youtube_url}"', verbose=True)
+        logger(f'ValueError: No video found for "{track_url}"', verbose=True)
         return None
     else:
         yt_search_result = yt_search_result['result'][0]
@@ -26,7 +26,8 @@ def get_description(youtube_url: str, logger: Logger) -> str:
     uploader_id = yt_search_result['channel']['name']
     if uploader_id not in video_title:
         video_title += f' - {uploader_id}'
-    return video_title, youtube_duration
+    description = pd.Series([video_title, youtube_duration], ['video_title', 'duration'])
+    return description
 
 
 def audio_download(youtube_url: str, audio_fname: str, logger=print):
