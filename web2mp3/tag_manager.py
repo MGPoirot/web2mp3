@@ -17,6 +17,7 @@ def get_track_tags(track_item: dict, logger: Logger, do_light=False) -> pd.Serie
         'title': track_item['name'],
         'album': track_item['album']['name'],
         'album_artist': track_item['album']['artists'][0]['name'],
+        'duration': track_item['duration_ms'] / 1000,
     }
     if not do_light:
         while True:
