@@ -1,7 +1,6 @@
 .*
 .*/
 __*/
-__pycache__/
 *.pyc
 *.pkl
 *.json
