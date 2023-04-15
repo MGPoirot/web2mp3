@@ -26,9 +26,9 @@ def download_track(track_url: str, logger=print):
     artist_p, album_p, track_p = [rm_char(f) for f in (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
 
     # Check if this song is already available, maybe in a different album
-    existing_tracks = glob(os.path.join(music_dir, 'Music', artist_p, '*', f'*{track_p}.mp3'))
+    existing_tracks = glob(os.path.join(music_dir, artist_p, '*', f'*{track_p}.mp3'))
     # TODO: This checking is not very robust
-    existing_tracks.extend(glob(os.path.join(music_dir, 'Music', artist_p, '*', f'*{track_p.replace(" ", "_")}.mp3')))
+    existing_tracks.extend(glob(os.path.join(music_dir, artist_p, '*', f'*{track_p.replace(" ", "_")}.mp3')))
 
     if any(existing_tracks):
         logger('FileExistsWarning:')
@@ -36,7 +36,7 @@ def download_track(track_url: str, logger=print):
             logger(''.ljust(print_space), f'{et[len(music_dir) + 5:]}')
     else:
         # Define paths
-        album_dir = os.path.join(music_dir, 'Music', artist_p, album_p)
+        album_dir = os.path.join(music_dir, artist_p, album_p)
         tr_prefix = None if mp3_tags.track_num is None else f'{mp3_tags.track_num} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
