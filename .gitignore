@@ -1,0 +1,9 @@
+.*
+.*/
+__*/
+*.pyc
+*.pkl
+*.json
+*.txt
+!requirements.txt
+!.gitignore
