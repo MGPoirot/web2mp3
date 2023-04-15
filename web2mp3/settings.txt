@@ -1,3 +1,4 @@
+# Public general settings
 max_daemons = 2
 print_space = 24
 default_tolerance = 0.10
