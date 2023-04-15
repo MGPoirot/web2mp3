@@ -1,4 +1,4 @@
-from utils import print_space, input_is, Logger, hms2s, settings
+from utils import input_is, Logger, hms2s, settings
 from settings import print_space
 from youtubesearchpython import VideosSearch
 import os
@@ -6,18 +6,25 @@ import sys
 import yt_dlp
 import pandas as pd
 
-def get_description(track_url: str, logger: Logger) -> str:
+
+def get_description(track_url: str, logger=print) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
-    :param logger:
-    :param youtube_url: URL as string
-    :logger logging object:
-    :return: title as string
+
+    Args:
+        :param logger:
+        :type logger: utils.Logger
+        :param track_url: URL as string
+        :type track_url: str
+
+    Returns:
+        :return: title as string
+        :rtype: str or None
     """
     # Get video title
     yt_search_result = VideosSearch(track_url, limit=1).result()
     if not any(yt_search_result['result']):
-        logger(f'ValueError: No video found for "{track_url}"', verbose=True)
+        logger(f'ValueError: No video found for "{track_url}"')
         return None
     else:
         yt_search_result = yt_search_result['result'][0]
@@ -26,7 +33,10 @@ def get_description(track_url: str, logger: Logger) -> str:
     uploader_id = yt_search_result['channel']['name']
     if uploader_id not in video_title:
         video_title += f' - {uploader_id}'
-    description = pd.Series([video_title, youtube_duration], ['video_title', 'duration'])
+
+    # We return a series object
+    description = pd.Series({'video_title': video_title,
+                             'duration': youtube_duration})
     return description
 
 
@@ -52,7 +62,8 @@ def audio_download(youtube_url: str, audio_fname: str, logger=print):
         logger('Youtube download successful')
     except BaseException as e:
         logger(f'Youtube download failed: {e}')
-        if input_is('No', input('>> Debug? [Yes]/No'.ljust(print_space)) or 'Yes'):
+        do_debug = input('>> Debug? [Yes]/No'.ljust(print_space))
+        if input_is('No', do_debug or 'Yes'):
             sys.exit()
         else:
             ydl_opts['verbose'] = True

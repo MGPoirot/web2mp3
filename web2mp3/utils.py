@@ -29,7 +29,7 @@ def hms2s(hhmmss: str) -> int:
     return sum([int(value) * multiplier for value, multiplier in zip(components, (1, 60, 3600))])
 
 
-def get_url_domain(track_url: str) -> str:
+def get_url_domain(track_url: str, logger=print):
     """
     The function get_url_domain extracts the domain name from a given URL. If a
      known domain is found in the URL, it returns the corresponding domain name
@@ -37,6 +37,8 @@ def get_url_domain(track_url: str) -> str:
      patterns.
 
     Args:
+        :param logger:
+        :type logger:
         :param track_url: The URL string to extract the domain from.
         :type track_url: str
 
@@ -64,8 +66,9 @@ def get_url_domain(track_url: str) -> str:
     for pattern, domain in patterns.items():
         if pattern in track_url:
             return domain
-    raise KeyError(f'No pattern found in "{track_url}".'
-                   f'\nKnown patterns: {"; ".join(patterns)}')
+    logger(f'No pattern found in "{track_url}".'
+           f'Known patterns: {"; ".join(patterns)}')
+    return None
 
 
 def shorten_url(url: str) -> str:
