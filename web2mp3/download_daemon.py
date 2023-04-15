@@ -64,7 +64,9 @@ def download_track(track_url: str, logger=print):
         if domain == 'youtube':
             download_method = youtube
         elif domain == 'soundcloud':
-            pass
+            return
+        else:
+            return
 
         # Download audio
         if not os.path.isfile(mp3_fname):

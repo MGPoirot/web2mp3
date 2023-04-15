@@ -9,7 +9,7 @@ from time import sleep
 from utils import Logger
 
 
-def get_track_tags(track_item: dict, logger: Logger, do_light=False) -> pd.Series:
+def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
     # in do_light mode we only get title, album and artist information; just enough to do matching.
     read_timeout = False
 
@@ -30,10 +30,10 @@ def get_track_tags(track_item: dict, logger: Logger, do_light=False) -> pd.Serie
             except TimeoutError:
                 if not read_timeout:
                     read_timeout = True
-                    logger('get_track_tags encountered a SpotiPy API ReadTimeout error', verbose=True)
+                    logger('get_track_tags encountered a SpotiPy API ReadTimeout error')
                     sleep(2)
                 else:
-                    logger('get_track_tags failed after a SpotiPy API ReadTimeout error', verbose=True)
+                    logger('get_track_tags failed after a SpotiPy API ReadTimeout error')
                     return
         if features is not None:
             tag_dict.update({
