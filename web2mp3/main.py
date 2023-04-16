@@ -3,7 +3,7 @@ import pandas as pd
 import pytube
 from time import sleep
 from utils import spotify, Logger, input_is, get_url_domain, shorten_url, hms2s, \
-    log_dir, settings
+    log_dir, get_path_components, track_exists
 from settings import print_space, default_market, default_tolerance, \
     search_limit
 from tag_manager import get_track_tags, manual_track_tags
@@ -36,6 +36,7 @@ def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
      "selena gomez - Lose You To Love Me (Official Music Video)")
     True
     """
+    # TODO: add more lenient matching: accents and special characters
     rip = lambda string: unidecode(string).lower()
     return rip(track_name) in rip(title) and rip(artist_name) in rip(title)
 
@@ -173,7 +174,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
             )  # returns [1]/2/3/4/5 depending on the number of found items
             default = '1' if any(items) else 'Retry'
             proceed = input(
-                f'>> {item_options}/Retry/Manual/Abort/Change market: '
+                f'>>> {item_options}/Retry/Manual/Abort/Change market: '
             ) or default
         else:
             proceed = default_response
@@ -201,7 +202,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
 
         elif input_is('Retry', proceed):
             logger(f'Provide new info for {platform} query: ')
-            search_query = input('>> Track name and artist? '
+            search_query = input('>>> Track name and artist? '
                                  ''.ljust(print_space))
             query.video_title = search_query
 
@@ -210,14 +211,14 @@ def lookup(query: pd.Series, platform: str, logger=print,
                 logger('Provide manual track info: ')
                 matched_obj = manual_track_tags(market=market)
             elif platform == 'youtube':
-                matched_obj = input('Provide YouTube URL: '
+                matched_obj = input('>>> Provide YouTube URL: '
                                     ''.ljust(print_space)).split('&')[0]
 
         elif input_is('Abort', proceed):
             matched_obj = False
 
         elif input_is('Change market', proceed):
-            market = input('>> Market code?'.ljust(print_space)) or None
+            market = input('>>> Market code?'.ljust(print_space)) or None
             logger('Market changed to:'.ljust(print_space))
 
         else:
@@ -269,7 +270,7 @@ def match_audio_with_tags(track_url: str, logger: Logger,
 
     # Perform matching and check results
     if query is None:
-        logger(f'Failed to produce {url_domain} query for lookup.')
+        logger(f'Failed: No {url_domain} query for matching.')
     else:
         matched_obj = lookup(query=query,
                              platform=search_platform,
@@ -279,16 +280,21 @@ def match_audio_with_tags(track_url: str, logger: Logger,
                              default_response=default_response,
                              search_limit=search_limit)
         if matched_obj is False:
-            logger(f'Failed to match {url_domain} item'
-                   f'with {search_platform} item.\n')
+            logger(f'Failed: No match between {url_domain} and'
+                   f' {search_platform} items.\n')
         else:
             if url_domain == 'spotify':
                 track_url = matched_obj
             elif url_domain == 'youtube':
                 track_tags = matched_obj
-            set_song_db(track_url, track_tags)
-            logger('Successfully Created Song DB entry.\n')
 
+            artist_p, _, track_p = get_path_components(track_tags)
+            if not track_exists(artist_p, track_p, logger=logger):
+                set_song_db(track_url, track_tags)
+                logger('Success: Song DB entry created.\n')
+            else:
+                set_song_db(track_url, None)
+                logger('Skipped: FileExists - Song DB entry set to None.\n')
     # Reset and return
     logger.verbose = logger_verbose_default
     return
@@ -306,24 +312,27 @@ def init_matching(*urls, default_response=None):
         if domain is None:
             continue
         elif 'playlist' in url:  # Handling of playlists
+            # Get playlist items
             if domain == 'youtube':
                 playlist_urls = pytube.Playlist(url)
             elif domain == 'spotify':
-                playlist_items = spotify.playlist(url.split('/')[-1])['tracks'][
-                    'items']
+                pl_uri = url.split('?')[0].split('/')[-1]
+                playlist_items = spotify.playlist(pl_uri)['tracks']['items']
                 playlist_urls = [
                     f"https://open.spotify.com/track/{t['track']['id']}" for t
                     in playlist_items]
+
+            # Ask if to continue
             do_playlist = input(
-                f'Received playlist with {len(playlist_urls)} items. Proceed? [Yes]/No  '.ljust(
-                    print_space))
+                f'>>> Received playlist with {len(playlist_urls)} items. '
+                f'Proceed? [Yes]/No  '.ljust(print_space))
             if input_is('No', do_playlist):
                 print('Playlist skipped.')
                 continue
             elif input_is('Yes', do_playlist) or not do_playlist:
                 default_response = input(
-                    'Set default response procedure?: [None]/1/Abort  '.ljust(
-                        print_space)) or None
+                    '>>> Set default response procedure?: [None]/1/Abort  '
+                    ''.ljust(print_space)) or None
                 if default_response is None:
                     pass
                 elif input_is('None', default_response):
@@ -338,7 +347,7 @@ def init_matching(*urls, default_response=None):
                 print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
         else:  # Handling of individual tracks
             if url in get_song_db():
-                print('Track exists in Song Data Base. Skipped.\n')
+                print('Skipped: Track exists in Song Data Base.\n')
                 continue
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
@@ -359,7 +368,7 @@ def init_matching(*urls, default_response=None):
 if __name__ == '__main__':
     if len(sys.argv) == 1:  # No URL provided, run in Python mode
         while True:
-            input_url = input('URL or [Abort]?'.ljust(print_space))
+            input_url = input('>>> URL or [Abort]?'.ljust(print_space))
             if not input_url or input_is('Abort', input_url):
                 print('Bye Bye!')
                 sys.exit()

@@ -1,4 +1,5 @@
-from utils import pickle_in, pickle_out, song_db_file
+from setup import song_db_file
+from utils import pickle_in, pickle_out
 import os
 
 
@@ -15,7 +16,7 @@ def get_song_db() -> dict:
 
 def set_song_db(youtube_url: str, value=None):
     """
-    Set a value to a key (=YouTube URL) in the song database
+    Set a value to a key (=short URL) in the song database
     """
     song_db = get_song_db()
     song_db[youtube_url] = value

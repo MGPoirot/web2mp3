@@ -1,14 +1,14 @@
+from setup import music_dir, daemon_dir, log_dir, settings
+from settings import print_space, max_daemons
 import os
 from glob import glob
 from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
-from utils import Logger, rm_char, get_url_domain, log_dir, shorten_url, daemon_dir, settings
-from settings import print_space, max_daemons
+from utils import Logger, get_url_domain, shorten_url, get_path_components, track_exists
 import youtube
 import atexit
 import sys
 from multiprocessing import Process
-music_dir = os.environ.get("MUSIC_DIR")
 
 
 def download_track(track_url: str, logger=print):
@@ -23,25 +23,15 @@ def download_track(track_url: str, logger=print):
 
     # Retrieve and extract song properties from the song database
     mp3_tags = get_song_db()[track_url]
-    artist_p, album_p, track_p = [rm_char(f) for f in (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
-
-    # Check if this song is already available, maybe in a different album
-    existing_tracks = glob(os.path.join(music_dir, artist_p, '*', f'*{track_p}.mp3'))
-    # TODO: This checking is not very robust
-    existing_tracks.extend(glob(os.path.join(music_dir, artist_p, '*', f'*{track_p.replace(" ", "_")}.mp3')))
-
-    if any(existing_tracks):
-        logger('FileExistsWarning:')
-        for et in existing_tracks:
-            logger(''.ljust(print_space), f'{et[len(music_dir) + 5:]}')
-    else:
+    artist_p, album_p, track_p = get_path_components(mp3_tags)
+    if not track_exists(artist_p, track_p):
         # Define paths
         album_dir = os.path.join(music_dir, artist_p, album_p)
         tr_prefix = None if mp3_tags.track_num is None else f'{mp3_tags.track_num} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
         os.makedirs(album_dir, mode=0o777, exist_ok=True)
-
+        get_path_components
         # Log storage locations
         logger('Album dir'.ljust(print_space), album_dir)
         logger('Cover filename    '.ljust(print_space), cov_fname)
@@ -119,12 +109,11 @@ if __name__ == '__main__':
     tried = []
     while True:
         song_db = get_song_db()
-        daemon_files = glob(daemon_dir.format('*'))
-        urls = [u for u, tags in song_db.items() if tags is not None]  # exclude finished
-        urls = [u for u in urls if not any(glob(u2t('*', u)))]  # exclude busy
-        urls = [u for u in urls if not u in tried]  # prevent potential inf while
+        urls = (u for u, tags in song_db.items() if tags is not None)  # finish
+        urls = (u for u in urls if not any(glob(u2t('*', u))))  # busy
+        urls = (u for u in urls if not u in tried)  # max tries
         if any(urls):
-            task = urls[0]
+            task = next(urls)
             tried.append(task)
             task_tmp = Logger(u2t(daemon_n, task))
             atexit.register(task_tmp.rm)
