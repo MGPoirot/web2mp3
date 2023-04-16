@@ -109,11 +109,11 @@ if __name__ == '__main__':
     tried = []
     while True:
         song_db = get_song_db()
-        urls = (u for u, tags in song_db.items() if tags is not None)  # finish
-        urls = (u for u in urls if not any(glob(u2t('*', u))))  # busy
-        urls = (u for u in urls if not u in tried)  # max tries
+        urls = [u for u, tags in song_db.items() if tags is not None]  # finish
+        urls = [u for u in urls if not any(glob(u2t('*', u)))]  # busy
+        urls = [u for u in urls if not u in tried]  # max tries
         if any(urls):
-            task = next(urls)
+            task = urls[0]
             tried.append(task)
             task_tmp = Logger(u2t(daemon_n, task))
             atexit.register(task_tmp.rm)
