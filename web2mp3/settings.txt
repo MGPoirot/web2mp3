@@ -1,5 +1,5 @@
 # Public general settings
-max_daemons = 2
+max_daemons = 4
 print_space = 24
 default_tolerance = 0.10
 default_market = "NL"

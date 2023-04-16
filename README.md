@@ -8,20 +8,20 @@ A scalable command line interface to download music from the internet with prope
 Easiest is calling `python main.py` which will start the Python Wizard that will help you provide input:
 
 ```python
-URL or [Abort]?          https://www.youtube.com/watch?v=NgE5mEQiizQ
+>>> URL or [Abort]?      https://www.youtube.com/watch?v=NgE5mEQiizQ
 Searching Spotify for    Dirty South Hip Hop - Royalty Free Music - Topic
-                         1) Dirty South - PANDSHAFT
-                         2) Dirty South Hip Hop - Royalty Free Music
+                         1) Dirty South - PANDSHAFT							 87%
+                         2) Dirty South Hip Hop - Royalty Free Music        100%
 Clear Spotify match      Dirty South Hip Hop - Royalty Free Music Instrumentals and Horror Soundscapes - Royalty Free Music
-Successfully Created Song DB entry.
+Success: Song DB entry created.
 
-URL or [Abort]?          https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
-Searching YouTube for    Dirty South Hip Hop - Royalty Free Music Instrumentals
-                         1) Dirty South Hip Hop - Royalty Free Music 
+>>> URL or [Abort]?      https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
+Searching YouTube for    Dirty South Hip Hop - Royalty Free Music Instrumental
+                         1) Dirty South Hip Hop - Royalty Free Music 	    100%
 Clear YouTube match      Dirty South Hip Hop - Royalty Free Music
-Successfully Created Song DB entry.
+Success: Song DB entry created.
 
-URL or [Abort]?          
+>>> URL or [Abort]?      
 ```
 
 Each call to the Wizard should take about a second, since downloading is performed in the background using a daemon, and mp3 tags are applied.
@@ -54,8 +54,6 @@ Music
         ├───1 - Track Name.mp3
         └───folder.jpg
 ```
-
-
 
 ## Backbone
 
