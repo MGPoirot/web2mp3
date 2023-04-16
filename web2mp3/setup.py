@@ -18,6 +18,8 @@ def get_settings_path() -> str:
 
 def import_settings():
     settings_path = get_settings_path()
+    if not os.path.isfile(settings_path):
+        raise FileNotFoundError('Settings file "settings.txt" is missing.')
     settings_module = SourceFileLoader('settings', settings_path)
     return settings_module.load_module()
 
