@@ -4,14 +4,15 @@ import os
 from glob import glob
 from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
-from utils import Logger, get_url_domain, shorten_url, get_path_components, track_exists
+from utils import Logger, get_url_domain, shorten_url, get_path_components,\
+    track_exists
 import youtube
 import atexit
 import sys
 from multiprocessing import Process
 
 
-def download_track(track_url: str, logger=print):
+def download_track(track_url: str, logger: object = print):
     """
     This handles downloading audio from YouTube and setting the right mp3 tags.
     :param track_url:

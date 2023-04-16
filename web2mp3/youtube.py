@@ -7,7 +7,7 @@ import yt_dlp
 import pandas as pd
 
 
-def get_description(track_url: str, logger=print) -> str:
+def get_description(track_url: str, logger: object = print) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
 
@@ -40,7 +40,7 @@ def get_description(track_url: str, logger=print) -> str:
     return description
 
 
-def audio_download(youtube_url: str, audio_fname: str, logger=print):
+def audio_download(youtube_url: str, audio_fname: str, logger: object = print):
     # ydl does not need the extension
     fname, codec = audio_fname.split(os.extsep)
 
