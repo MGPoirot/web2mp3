@@ -31,7 +31,7 @@ def hms2s(hhmmss: str) -> int:
     return sum([int(value) * multiplier for value, multiplier in zip(components, (1, 60, 3600))])
 
 
-def get_url_domain(track_url: str, logger=print):
+def get_url_domain(track_url: str, logger: object = print):
     """
     The function get_url_domain extracts the domain name from a given URL. If a
      known domain is found in the URL, it returns the corresponding domain name
@@ -182,7 +182,7 @@ class Logger:
             os.remove(self.path)
 
 
-def free_folder(directory: str, owner='pi', logger=print):
+def free_folder(directory: str, owner='pi', logger: object = print):
     # As long as you do not run the command as sudo, you should not end up with ownership issues
     """ Clear any access restrictions and set owner """
     os.system(f"sudo chmod 777 -R '{directory}'")
@@ -308,7 +308,7 @@ def rm_char(text: str) -> str:
     return text
 
 
-def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
+def track_exists(artist_p: str, track_p: str, logger: object = print) -> bool:
     # Check if this song is already available, maybe in a different album
     pattern = re.compile(re.escape(track_p).replace(r'\ ', r'[\s_]*'),
                          re.IGNORECASE | re.UNICODE)

@@ -58,7 +58,6 @@ def lookup(query: pd.Series, platform: str, logger=print,
     :type platform: str
 
     :param logger: A logging object for printing information and errors.
-    :type logger: logging.Logger
 
     :param duration_tolerance: The percentage difference between the
         duration of the search result and the query duration that is still
@@ -147,6 +146,9 @@ def lookup(query: pd.Series, platform: str, logger=print,
             item_duration = hms2s(item['duration'])
             item_descriptor = item['title']
             title = item['title']
+        else:
+            logger(f'Unknown platform "{platform}"')
+            break
 
         # Check how the duration matches up with what we are looking for
         relative_duration = item_duration / query.duration
