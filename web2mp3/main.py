@@ -13,12 +13,12 @@ from song_db import set_song_db, get_song_db
 from download_daemon import start_daemon
 from youtubesearchpython import VideosSearch
 from unidecode import unidecode
-
+import re
 
 def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
     """
     Checks if the given track name and artist name are a clear match for a
-    given title (case-insensitive, diacritic-insensitive).
+    given title (case-, diacritic- and non-alphanumeric insensitive).
 
     :param track_name: The name of the track to be checked.
     :type track_name: str
@@ -37,7 +37,7 @@ def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
     True
     """
     # TODO: add more lenient matching: accents and special characters
-    rip = lambda string: unidecode(string).lower()
+    rip = lambda arg: re.sub(r'\W+', '', unidecode(arg).lower())
     return rip(track_name) in rip(title) and rip(artist_name) in rip(title)
 
 
