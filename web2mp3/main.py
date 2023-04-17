@@ -2,18 +2,20 @@ import sys
 import pandas as pd
 import pytube
 from time import sleep
-from utils import spotify, Logger, input_is, get_url_domain, shorten_url, hms2s, \
-    log_dir, get_path_components, track_exists
+from setup import log_dir, spotify_api
+from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
+    get_path_components, track_exists
 from settings import print_space, default_market, default_tolerance, \
     search_limit
-from tag_manager import get_track_tags, manual_track_tags
-import youtube
-import soundcloud
+from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
+import modules
 from song_db import set_song_db, get_song_db
 from download_daemon import start_daemon
 from youtubesearchpython import VideosSearch
 from unidecode import unidecode
 import re
+from importlib import import_module
+
 
 def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
     """
@@ -43,7 +45,7 @@ def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
 
 def lookup(query: pd.Series, platform: str, logger=print,
            duration_tolerance=0.05, market='NL', default_response=None,
-           search_limit=5):
+           search_limit=5) -> pd.Series:
     """
     Search for a track on a specified platform and return the best match.
 
@@ -114,7 +116,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
     items = []
     try:
         if platform == 'spotify':
-            results = spotify.search(
+            results = spotify_api.search(
                 q=search_query,
                 limit=search_limit,
                 market=market,
@@ -164,7 +166,9 @@ def lookup(query: pd.Series, platform: str, logger=print,
             if platform == 'spotify':
                 matched_obj = get_track_tags(item, logger, do_light=False)
             else:
-                matched_obj = item['link']
+                matched_obj = pd.Series({'track_url': item['link'],
+                                         'video_title': item_descriptor,
+                                         'duration': item_duration})
             break
 
     # Without clear match provide the user with options:
@@ -187,18 +191,23 @@ def lookup(query: pd.Series, platform: str, logger=print,
             if idx > len(items):
                 logger(f'Invalid index {idx} for {len(items)} options.')
             else:
+                selected_item = items[idx]
+
                 if platform == 'spotify':
                     matched_obj = get_track_tags(
-                        track_item=items[idx],
+                        track_item=selected_item,
                         logger=logger,
                         do_light=False
                     )
                     item_descriptor = f'{matched_obj.title} - ' \
                                       f'{matched_obj.album_artist}'
                 elif platform == 'youtube':
-                    item = items[idx]
+                    item = selected_item
                     item_descriptor = item['title']
-                    matched_obj = item['link']
+                    item_duration = hms2s(item['duration'])
+                    matched_obj = pd.Series({'track_url': item['link'],
+                                             'video_title': item_descriptor,
+                                             'duration': item_duration})
                 logger(f'Match accepted by {accept_origin}: '
                        f''.ljust(print_space), item_descriptor)
 
@@ -248,61 +257,57 @@ def match_audio_with_tags(track_url: str, logger: Logger,
     database, after which it calls this function again, but as a background
     process, and finishes.
     """
+
     logger_verbose_default = logger.verbose
     logger.verbose = True
 
     # Get the information we need to perform the matching
-    url_domain = get_url_domain(track_url)
-    if url_domain is None:
-        query = None
-    elif url_domain == 'spotify':
-        search_platform = 'youtube'
-        item = spotify.track(track_url, market=market)
-        track_tags = get_track_tags(item, logger=logger, do_light=False)
-        query = track_tags
-        track_url = None
-    else:
-        search_platform = 'spotify'
-        if url_domain == 'youtube':
-            module = youtube
-        elif url_domain == 'soundcloud':
-            module = soundcloud
-        query = module.get_description(track_url, logger)
-        track_tags = None
+    input_platform = get_url_platform(track_url)
+    source_module = import_module(
+        f'modules.{input_platform}') if input_platform else None
+    search_module = source_module.get_search_platform()
 
     # Perform matching and check results
+    query = source_module.get_description(track_url, logger,
+                                          market) if source_module else None
     if query is None:
-        logger(f'Failed: No {url_domain} query for matching.')
+        logger(f'Failed: No {input_platform} query for matching.')
     else:
-        matched_obj = lookup(query=query,
-                             platform=search_platform,
-                             logger=logger,
-                             duration_tolerance=duration_tolerance,
-                             market=market,
-                             default_response=default_response,
-                             search_limit=search_limit)
-        if matched_obj is False:
-            logger(f'Failed: No match between {url_domain} and'
-                   f' {search_platform} items.\n')
+        match_obj = lookup(query=query,
+                           platform=search_module.name,
+                           logger=logger,
+                           duration_tolerance=duration_tolerance,
+                           market=market,
+                           default_response=default_response,
+                           search_limit=search_limit)
+        if match_obj is False:
+            logger(f'Failed: No match between {input_platform} and'
+                   f' {source_module.get_search_platform().name} items.\n')
         else:
-            if url_domain == 'spotify':
-                track_url = matched_obj
-            elif url_domain == 'youtube':
-                track_tags = matched_obj
-
+            track_uri, track_tags = source_module.sort_lookup(query, match_obj)
+            tags_uri = get_tags_uri(track_tags)
             artist_p, _, track_p = get_path_components(track_tags)
-            if not track_exists(artist_p, track_p, logger=logger):
-                set_song_db(track_url, track_tags)
-                logger('Success: Song DB entry created.\n')
+
+            song_db_keys = get_song_db().keys()
+            if tags_uri in song_db_keys:
+                logger('Skipped: TagsExists\n')
+            elif track_uri in song_db_keys:
+                set_song_db(tags_uri, None)
+                logger('Skipped: TrackExists - DB Tags set to None.\n')
+            elif track_exists(artist_p, track_p, logger=logger):
+                set_song_db(track_uri, None)
+                set_song_db(tags_uri, None)
+                logger('Skipped: FileExists - DB Track & Tags set to None.\n')
             else:
-                set_song_db(track_url, None)
-                logger('Skipped: FileExists - Song DB entry set to None.\n')
+                set_song_db(track_uri, track_tags)
+                set_song_db(tags_uri, None)
+                logger('Success: Song DB entries created.\n')
     # Reset and return
     logger.verbose = logger_verbose_default
     return
 
 
-def init_matching(*urls, default_response=None):
+def init_matching(*urls, default_response=None, platform=None):
     for i, url in enumerate(urls):
         # Sanitize URL
         url = url.split('&')[0]
@@ -310,19 +315,12 @@ def init_matching(*urls, default_response=None):
             continue
 
         # Identify the domain
-        domain = get_url_domain(url)
-        if domain is None:
-            continue
-        elif 'playlist' in url:  # Handling of playlists
+        if platform is None:
+            platform = import_module(f'modules.{get_url_platform(url)}')
+
+        if 'playlist' in url:  # Handling of playlists
             # Get playlist items
-            if domain == 'youtube':
-                playlist_urls = pytube.Playlist(url)
-            elif domain == 'spotify':
-                pl_uri = url.split('?')[0].split('/')[-1]
-                playlist_items = spotify.playlist(pl_uri)['tracks']['items']
-                playlist_urls = [
-                    f"https://open.spotify.com/track/{t['track']['id']}" for t
-                    in playlist_items]
+            playlist_urls = platform.playlist_handler(url)
 
             # Ask if to continue
             do_playlist = input(
@@ -344,17 +342,23 @@ def init_matching(*urls, default_response=None):
                     print('Invalid input:'.ljust(print_space),
                           f'"{default_response}"')
                     default_response = None
-                init_matching(*playlist_urls, default_response=default_response)
+                init_matching(
+                    *playlist_urls,
+                    default_response=default_response,
+                    platform=platform
+                )
             else:
                 print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
         else:  # Handling of individual tracks
-            if url in get_song_db():
-                print('Skipped: Track exists in Song Data Base.\n')
+            if platform.url2uri(url) in get_song_db():
+                print(f'Skipped: {platform.name} URI exists in Song Data '
+                      'Base.\n')
                 continue
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
             log_obj(
-                f'{i}/{len(urls)} Received new {domain} URL'.ljust(print_space),
+                f'{i}/{len(urls)} Received new {platform.name} URL'.ljust(
+                    print_space),
                 url)
             match_audio_with_tags(
                 track_url=url,

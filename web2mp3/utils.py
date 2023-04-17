@@ -1,5 +1,4 @@
-from setup import home_dir, music_dir, daemon_dir, log_dir, song_db_file, \
-    spotify, settings
+from setup import music_dir, settings
 from settings import print_space
 import pickle
 import os
@@ -12,6 +11,8 @@ import pandas as pd
 import re
 from glob import iglob
 eyed3.log.setLevel("ERROR")
+
+
 
 
 def hms2s(hhmmss: str) -> int:
@@ -31,9 +32,9 @@ def hms2s(hhmmss: str) -> int:
     return sum([int(value) * multiplier for value, multiplier in zip(components, (1, 60, 3600))])
 
 
-def get_url_domain(track_url: str, logger: object = print):
+def get_url_platform(track_url: str, logger: object = print):
     """
-    The function get_url_domain extracts the domain name from a given URL. If a
+    The function get_url_platform extracts the domain name from a given URL. If a
      known domain is found in the URL, it returns the corresponding domain name
      as a string. Otherwise, it raises a KeyError with a list of known domain
      patterns.
@@ -52,19 +53,22 @@ def get_url_domain(track_url: str, logger: object = print):
         :raise KeyError: If the URL does not contain any known domain patterns.
 
     Example:
-        > get_url_domain('http://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM')
+        > get_url_platform('http://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM')
         'spotify'
 
-        > get_url_domain('https://www.youtube.com/watch?v=NgE5mEQiizQ')
+        > get_url_platform('https://www.youtube.com/watch?v=NgE5mEQiizQ')
         'youtube'
 
-        > get_url_domain('https://on.soundcloud.com/H4C3V')
+        > get_url_platform('https://on.soundcloud.com/H4C3V')
         'soundcloud'
     """
     patterns = {'open.spotify.com': 'spotify',
                 'youtube.com':      'youtube',
                 'soundcloud.com':   'soundcloud',
-                'youtu.be':         'youtube'}
+                'youtu.be':         'youtube',
+                'youtube:':         'youtube',
+                'spotify:':         'spotify',
+                'soundcloud:':      'soundcloud',}
     for pattern, domain in patterns.items():
         if pattern in track_url:
             return domain

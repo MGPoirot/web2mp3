@@ -1,18 +1,18 @@
-from setup import music_dir, daemon_dir, log_dir, settings
+from setup import music_dir, daemon_dir, log_dir
 from settings import print_space, max_daemons
 import os
 from glob import glob
 from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
-from utils import Logger, get_url_domain, shorten_url, get_path_components,\
+from utils import Logger, get_url_platform, shorten_url, get_path_components,\
     track_exists
-import youtube
 import atexit
 import sys
 from multiprocessing import Process
+from importlib import import_module
 
 
-def download_track(track_url: str, logger: object = print):
+def download_track(track_uri: str, logger=print):
     """
     This handles downloading audio from YouTube and setting the right mp3 tags.
     :param track_url:
@@ -23,7 +23,7 @@ def download_track(track_url: str, logger: object = print):
     logger('Started download_track')
 
     # Retrieve and extract song properties from the song database
-    mp3_tags = get_song_db()[track_url]
+    mp3_tags = get_song_db()[track_uri]
     artist_p, album_p, track_p = get_path_components(mp3_tags)
     if not track_exists(artist_p, track_p):
         # Define paths
@@ -32,7 +32,7 @@ def download_track(track_url: str, logger: object = print):
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
         os.makedirs(album_dir, mode=0o777, exist_ok=True)
-        get_path_components
+
         # Log storage locations
         logger('Album dir'.ljust(print_space), album_dir)
         logger('Cover filename    '.ljust(print_space), cov_fname)
@@ -51,13 +51,9 @@ def download_track(track_url: str, logger: object = print):
             download_cover_img(cov_fname, cover_url, logger=logger)
 
         # Specify downloading method
-        domain = get_url_domain(track_url)
-        if domain == 'youtube':
-            download_method = youtube
-        elif domain == 'soundcloud':
-            return
-        else:
-            return
+        domain = get_url_platform(track_uri)
+        download_method = import_module(f'modules.{domain}')
+        track_url = download_method.uri2url(track_uri)
 
         # Download audio
         if not os.path.isfile(mp3_fname):
@@ -74,7 +70,7 @@ def download_track(track_url: str, logger: object = print):
         logger('File permissions set.')
     
     # Clear song_db
-    set_song_db(track_url, None)
+    set_song_db(track_uri, None)
     logger('Song data base value cleared to None.')
 
     # Finish

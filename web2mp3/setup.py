@@ -88,6 +88,7 @@ def run_setup_wizard():
     print('Secrets successfully stored.\n'
           'Web2MP3 set up successful.')
 
+
 # Import public settings
 settings = import_settings()
 
@@ -113,5 +114,5 @@ log_dir = os.path.join(home_dir, '.logs', '{}.json')
 song_db_file = os.path.join(home_dir, 'song_db.pkl')
 
 # Access Spotify API
-spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
 
