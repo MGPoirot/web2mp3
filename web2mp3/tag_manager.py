@@ -1,11 +1,16 @@
 import pandas as pd
-from utils import spotify, input_is, flatten, settings
+from setup import spotify_api
+from utils import input_is, flatten, settings
 from settings import print_space
 from datetime import datetime
 import eyed3
 import requests
 import shutil
 from time import sleep
+
+
+def get_tags_uri(track_tags: pd.Series) -> str:
+    return track_tags.internet_radio_url.replace(':track', '')
 
 
 def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
@@ -22,7 +27,7 @@ def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
     if not do_light:
         while True:
             try:
-                features = spotify.audio_features(track_item['uri'])[0]
+                features = spotify_api.audio_features(track_item['uri'])[0]
                 break
             except KeyboardInterrupt:
                 print('KeyboardInterrupt')
@@ -39,13 +44,14 @@ def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
                     return
         if features is not None:
             artist_items = track_item['artists']
-            genres = [spotify.artist(a['uri'])['genres'] for a in artist_items]
+            genres = [spotify_api.artist(a['uri'])['genres'] for a in
+                      artist_items]
             tag_dict.update({
                 'bpm': int(features['tempo']),
                 'artist': '; '.join([a['name'] for a in artist_items]),
                 'internet_radio_url': track_item['uri'],
                 'cover': track_item['album']['images'][0]['url'],
-                'disc_num': spotify.track(track_item['uri'])['disc_number'],
+                'disc_num': spotify_api.track(track_item['uri'])['disc_number'],
                 'genre': '; '.join(flatten(genres)),
                 'release_date': track_item['album']['release_date'],
                 'recording_date': track_item['album']['release_date'],
@@ -75,7 +81,7 @@ def manual_track_tags(market='NL') -> pd.Series:
     tag_series.recording_date = tag_series.release_date
     if tag_series.album is None:
         tag_series.album = tag_series.title
-    found_artist = spotify.search(
+    found_artist = spotify_api.search(
         q=tag_series.artist,
         market=market,
         limit=1,

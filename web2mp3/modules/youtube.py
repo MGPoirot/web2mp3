@@ -5,9 +5,33 @@ import os
 import sys
 import yt_dlp
 import pandas as pd
+import pytube
+
+name = 'youtube'
+target = 'track'
+playlist_handler = pytube.Playlist
+
+def sort_lookup(query: pd.Series, matched_obj: pd.Series):
+    track_url = url2uri(query.track_url)
+    track_tags = matched_obj
+    return track_url, track_tags
 
 
-def get_description(track_url: str, logger: object = print) -> str:
+def get_search_platform():
+    from modules import spotify
+    return spotify
+
+
+def url2uri(url: str, raw=False) -> str:
+    uri = url.split('&')[0].split('watch?v=')[-1].split('.be/')[-1]
+    domain = '' if raw else 'youtube:'
+    return f'{domain}{uri}'
+
+def uri2url(uri: str) -> str:
+    return f'https://www.youtube.com/watch?v={uri}'
+
+
+def get_description(track_url: str, logger: object = print, *kwargs) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
 
@@ -35,7 +59,8 @@ def get_description(track_url: str, logger: object = print) -> str:
         video_title += f' - {uploader_id}'
 
     # We return a series object
-    description = pd.Series({'video_title': video_title,
+    description = pd.Series({'track_url': track_url,
+                             'video_title': video_title,
                              'duration': youtube_duration})
     return description
 
