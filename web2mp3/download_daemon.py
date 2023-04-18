@@ -76,13 +76,10 @@ def download_track(track_uri: str, logger=print):
 
 
 def syscall():
-    # believe it or not, this does make a difference compared to
-    # - not the call
-    # - assigning a lambda function
     if os.name == 'posix':
-        os.system(f'python download_daemon.py &')
+        os.system('python download_daemon.py background &')
     else:
-        os.system(f'pythonw download_daemon.py')
+        os.system('pythonw download_daemon.py background')
 
 
 def start_daemon():
@@ -90,35 +87,52 @@ def start_daemon():
     if n_daemons < max_daemons:
         p = Process(target=syscall)
         p.start()
-    return
+        return True
+    else:
+        return False
 
 
 def uri2path(uri: str) -> str:
     return uri.replace(':', '-')
+
+
 def u2t(n, uri: str) -> str:
     return daemon_dir.format(f'{n}_{uri2path(uri)}')
 
 
 if __name__ == '__main__':
-    daemon_n = len(glob(daemon_dir.format('[0-9]')))
-    daemon_tmp = Logger(daemon_dir.format(daemon_n))
-    atexit.register(daemon_tmp.rm)
-    tried = []
-    while True:
-        song_db = get_song_db()
-        uris = [u for u, tags in song_db.items() if tags is not None]  # finish
-        uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
-        uris = [u for u in uris if not u in tried]  # max tries
-        if any(uris):
-            task = uris[0]
-            tried.append(task)
-            task_tmp = Logger(u2t(daemon_n, task))
-            atexit.register(task_tmp.rm)
-            logger_path = log_dir.format(uri2path(task))
-            sys.stdout = open(logger_path.replace('json', 'txt'), "w")
-            log_obj = Logger(logger_path, verbose=True)
-            download_track(task, logger=log_obj)
-            task_tmp.rm()
-        else:
-            break
+    # Accept input
+    process_mode = 'start'
+    if len(sys.argv) > 1:
+        process_mode = sys.argv[1]
 
+    # Start daemon
+    if process_mode == 'start':
+        daemon_started = start_daemon()
+        daemon_started = '' if daemon_started else 'No '
+        print(f'{daemon_started}Daemon started')
+    else:  # Run Daemon (special case is process_mode == verbose)
+        daemon_n = len(glob(daemon_dir.format('[0-9]')))
+        daemon_tmp = Logger(daemon_dir.format(daemon_n))
+        atexit.register(daemon_tmp.rm)
+        tried = []
+        while True:
+            song_db = get_song_db()
+            uris = [u for u, tags in song_db.items() if tags is not None]  # finish
+            uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
+            uris = [u for u in uris if not u in tried]  # max tries
+            if any(uris):
+                task = uris[0]
+                tried.append(task)
+                task_tmp = Logger(u2t(daemon_n, task))
+                atexit.register(task_tmp.rm)
+                logger_path = log_dir.format(uri2path(task))
+                if not process_mode == 'verbose':
+                    sys.stdout = open(logger_path.replace('json', 'txt'), "w")
+                log_obj = Logger(logger_path, verbose=True)
+                download_track(task, logger=log_obj)
+                task_tmp.rm()
+            else:
+                break
+            if process_mode == 'verbose':
+                break
