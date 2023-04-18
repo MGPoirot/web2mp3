@@ -17,6 +17,42 @@ import re
 from importlib import import_module
 
 
+def sanitize_track_name(track_name: str) -> str:
+    """Removes common words and phrases from a given track name and returns a
+    sanitized string in lower case.
+
+    Args:
+        :param track_name: A string representing the original track name.
+        :type track_name: str
+
+    Returns:
+        :return A string representing the sanitized track name.
+        :rtype str
+
+    This function removes the following words and phrases from the track name:
+    remastered, remaster, single, special, radio, "- edit", "(stereo)"
+    And the following if they appear after any of the above words:
+    - version, edit, mix
+    Additionally, any 4-digit year preceeding or following above words is
+    removed from string.
+
+    Example:
+    > sanitize_track_name("Bohemian Rhapsody - Remastered 2011")
+    "Bohemian Rhapsody"
+    """
+    words_to_remove = ['remastered', 'remaster', 'single', 'special', 'radio',
+                       '- edit', '(stereo)']
+    second_words = [' version', ' edit', ' mix', '']
+    track_name = track_name.lower()
+    year_pattern = re.compile(r'(19|20)\d{2}\b', flags=re.IGNORECASE)
+    for w1 in words_to_remove:
+        for w2 in second_words:
+            pattern = f'{w1}{w2}\s*{year_pattern.pattern}|\s*{w1}{w2}'
+            track_name = re.sub(pattern, '', track_name)
+    track_name = re.sub(year_pattern, '', track_name)
+    return track_name.strip()
+
+
 def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
     """
     Checks if the given track name and artist name are a clear match for a
@@ -38,9 +74,12 @@ def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
      "selena gomez - Lose You To Love Me (Official Music Video)")
     True
     """
-    # TODO: add more lenient matching: accents and special characters
-    rip = lambda arg: re.sub(r'\W+', '', unidecode(arg).lower())
-    return rip(track_name) in rip(title) and rip(artist_name) in rip(title)
+    rip = lambda arg: re.sub(r'\W+', '', unidecode(arg.lower()))
+    artist_name = artist_name.lower()
+    artist_name = artist_name[4:] if artist_name[:4] == 'the ' else artist_name
+    track_name = sanitize_track_name(track_name)
+    return rip(track_name) in rip(title) \
+        and rip(artist_name) in rip(title)
 
 
 def lookup(query: pd.Series, platform: str, logger=print,
