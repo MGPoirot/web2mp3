@@ -1,12 +1,11 @@
 import pandas as pd
 from setup import spotify_api
-from utils import input_is, flatten, settings
+from utils import input_is, flatten, timeout_handler, settings
 from settings import print_space
 from datetime import datetime
 import eyed3
 import requests
 import shutil
-from time import sleep
 
 
 def get_tags_uri(track_tags: pd.Series) -> str:
@@ -25,24 +24,7 @@ def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
         'duration': track_item['duration_ms'] / 1000,
     }
     if not do_light:
-        features = None
-        while True:
-            try:
-                features = spotify_api.audio_features(track_item['uri'])[0]
-                break
-            except KeyboardInterrupt:
-                print('KeyboardInterrupt')
-                return
-            except TimeoutError:
-                if not read_timeout:
-                    read_timeout = True
-                    logger('get_track_tags encountered'
-                           ' a SpotiPy API ReadTimeout error')
-                    sleep(2)
-                else:
-                    logger('get_track_tags failed after'
-                           ' a SpotiPy API ReadTimeout error')
-                    return
+        features = timeout_handler(spotify_api.audio_features, track_item['uri'])[0]
         if features is not None:
             artist_items = track_item['artists']
             genres = [spotify_api.artist(a['uri'])['genres'] for a in
@@ -83,12 +65,12 @@ def manual_track_tags(market='NL') -> pd.Series:
     tag_series.recording_date = tag_series.release_date
     if tag_series.album is None:
         tag_series.album = tag_series.title
-    found_artist = spotify_api.search(
-        q=tag_series.artist,
-        market=market,
-        limit=1,
-        type='artist'
-    )['artists']['items'][0]
+    found_artist = timeout_handler(spotify_api.search,
+                                   q=tag_series.artist,
+                                   market=market,
+                                   limit=1,
+                                   type='artist',
+                                   )['artists']['items'][0]
     is_artist = input(f'>>> Is this the artist you were looking for? '
                       f'"{found_artist["name"]}" [Yes]/No') or 'Yes'
     if not input_is('No', is_artist):

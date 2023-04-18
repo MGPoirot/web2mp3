@@ -1,3 +1,4 @@
+from utils import timeout_handler
 from setup import spotify_api
 from tag_manager import get_track_tags
 import pandas as pd
@@ -10,7 +11,7 @@ target = 'tags'
 def playlist_handler(url: str) -> list:
     pl_uri = url2uri(url, raw=True)
     playlist_items = []
-    results = spotify_api.playlist(pl_uri)['tracks']
+    results = timeout_handler(spotify_api.playlist, pl_uri)['tracks']
     while results['next']:
         results = spotify_api.next(results)
         playlist_items.extend(results['items'])
@@ -30,7 +31,7 @@ def get_search_platform():
 
 
 def get_description(track_url, logger, market='NL'):
-    item = spotify_api.track(track_url, market=market)
+    item = timeout_handler(spotify_api.track, track_url, market=market)
     track_tags = get_track_tags(item, logger=logger, do_light=False)
     query = track_tags
     return query
