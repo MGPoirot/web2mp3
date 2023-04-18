@@ -411,7 +411,7 @@ def init_matching(*urls, default_response=None, platform=None):
                 default_response=default_response,
                 search_limit=search_limit
             )
-        #start_daemons()
+        start_daemons()
 
 
 if __name__ == '__main__':
