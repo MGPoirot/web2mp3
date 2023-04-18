@@ -43,10 +43,11 @@ def download_track(track_uri: str, logger=print):
             logger('KeyError: Cover URL was not set at all')
         else:
             cover_url = mp3_tags.pop('cover')
-        if os.path.isfile(cov_fname):
-            logger('FileExistsWarning:', cov_fname)
-        elif cover_url is None:
+
+        if cover_url is None:
             logger('ValueError: No cover URL set.')
+        elif os.path.isfile(cov_fname):
+            logger('FileExistsWarning:', cov_fname)
         else:
             download_cover_img(cov_fname, cover_url, logger=logger)
 
@@ -56,10 +57,7 @@ def download_track(track_uri: str, logger=print):
         track_url = download_method.uri2url(track_uri)
 
         # Download audio
-        if not os.path.isfile(mp3_fname):
-            download_method.audio_download(track_url, mp3_fname, logger=logger)
-        else:
-            logger('FileExistsWarning', mp3_fname)
+        download_method.audio_download(track_url, mp3_fname, logger=logger)
 
         # Set file tags
         set_file_tags(mp3_tags, mp3_fname, audio_source_url=track_url, logger=logger)
@@ -95,8 +93,10 @@ def start_daemon():
     return
 
 
-def u2t(n, t: str) -> str: 
-    return daemon_dir.format(f'{n}_{shorten_url(t)}')
+def uri2path(uri: str) -> str:
+    return uri.replace(':', '-')
+def u2t(n, uri: str) -> str:
+    return daemon_dir.format(f'{n}_{uri2path(uri)}')
 
 
 if __name__ == '__main__':
@@ -106,15 +106,15 @@ if __name__ == '__main__':
     tried = []
     while True:
         song_db = get_song_db()
-        urls = [u for u, tags in song_db.items() if tags is not None]  # finish
-        urls = [u for u in urls if not any(glob(u2t('*', u)))]  # busy
-        urls = [u for u in urls if not u in tried]  # max tries
-        if any(urls):
-            task = urls[0]
+        uris = [u for u, tags in song_db.items() if tags is not None]  # finish
+        uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
+        uris = [u for u in uris if not u in tried]  # max tries
+        if any(uris):
+            task = uris[0]
             tried.append(task)
             task_tmp = Logger(u2t(daemon_n, task))
             atexit.register(task_tmp.rm)
-            logger_path = log_dir.format(shorten_url(task))
+            logger_path = log_dir.format(uri2path(task))
             sys.stdout = open(logger_path.replace('json', 'txt'), "w")
             log_obj = Logger(logger_path, verbose=True)
             download_track(task, logger=log_obj)

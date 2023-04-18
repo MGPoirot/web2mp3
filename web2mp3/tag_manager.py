@@ -17,14 +17,15 @@ def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
     # in do_light mode we only get title, album and artist information;
     # just enough to do matching.
     read_timeout = False
-
+    album = track_item['album']
     tag_dict = {
         'title': track_item['name'],
-        'album': track_item['album']['name'],
-        'album_artist': track_item['album']['artists'][0]['name'],
+        'album': album['name'],
+        'album_artist': album['artists'][0]['name'],
         'duration': track_item['duration_ms'] / 1000,
     }
     if not do_light:
+        features = None
         while True:
             try:
                 features = spotify_api.audio_features(track_item['uri'])[0]
@@ -46,15 +47,16 @@ def get_track_tags(track_item: dict, logger=print, do_light=False) -> pd.Series:
             artist_items = track_item['artists']
             genres = [spotify_api.artist(a['uri'])['genres'] for a in
                       artist_items]
+            cover_img = album['images'][0]['url'] if any(album['images']) else None
             tag_dict.update({
                 'bpm': int(features['tempo']),
                 'artist': '; '.join([a['name'] for a in artist_items]),
                 'internet_radio_url': track_item['uri'],
-                'cover': track_item['album']['images'][0]['url'],
+                'cover': cover_img,
                 'disc_num': spotify_api.track(track_item['uri'])['disc_number'],
                 'genre': '; '.join(flatten(genres)),
-                'release_date': track_item['album']['release_date'],
-                'recording_date': track_item['album']['release_date'],
+                'release_date': album['release_date'],
+                'recording_date': album['release_date'],
                 'tagging_date': datetime.now().strftime('%Y-%m-%d'),
                 'track_num': track_item['track_number'],
             })
