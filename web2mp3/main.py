@@ -41,8 +41,8 @@ def sanitize_track_name(track_name: str) -> str:
     "Bohemian Rhapsody"
     """
     words_to_remove = ['remastered', 'remaster', 'single', 'special', 'radio',
-                       '- edit', '(stereo)']
-    second_words = [' version', ' edit', ' mix', '']
+                       '- edit', 'stereo', 'digital']
+    second_words = [' version', ' edit', ' mix', 'remaster', '']
     track_name = track_name.lower()
     year_pattern = re.compile(r'(19|20)\d{2}\b', flags=re.IGNORECASE)
     for w1 in words_to_remove:

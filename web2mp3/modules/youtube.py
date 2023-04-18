@@ -29,7 +29,7 @@ def url2uri(url: str, raw=False) -> str:
     return f'{domain}{uri}'
 
 def uri2url(uri: str) -> str:
-    return f'https://www.youtube.com/watch?v={uri}'
+    return f'https://www.youtube.com/watch?v={uri.split(":")[-1]}'
 
 
 def get_description(track_url: str, logger: object = print, *kwargs) -> str:
