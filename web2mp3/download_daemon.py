@@ -120,6 +120,13 @@ def get_tasks() -> list:
 
 
 if __name__ == '__main__':
+    """
+    Behaviour:
+    - Start [default]:  starts daemons until max_daemons has been reached
+    - Verbose:          starts one daemon, runs one task and prints logs
+    - anything else:    starts one daemon and runs it in the background
+    """
+
     # Accept input
     run_mode = sys.argv[1] if len(sys.argv) > 1 else 'start'
     run_mode = 'verbose' if run_mode == '--mode=client' else run_mode

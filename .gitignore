@@ -7,3 +7,4 @@ __*/
 *.txt
 !requirements.txt
 !.gitignore
+*_cookies.txt
