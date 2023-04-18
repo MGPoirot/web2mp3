@@ -331,21 +331,29 @@ def match_audio_with_tags(track_url: str, logger: Logger,
         else:
             track_uri, track_tags = source_module.sort_lookup(query, match_obj)
             tags_uri = get_tags_uri(track_tags)
-            artist_p, _, track_p = get_path_components(track_tags)
+            source_uri = source_module.url2uri(track_url)  # 1 id may >1  urls
 
+            # File exists
             song_db_indices = get_song_db().index
-            if tags_uri in song_db_indices:
+            artist_p, _, track_p = get_path_components(track_tags)
+            skip = True
+            if track_exists(artist_p, track_p, logger=logger):
+                logger('Skipped: FileExists\n')
+            elif tags_uri in song_db_indices:
                 logger('Skipped: TagsExists\n')
             elif track_uri in song_db_indices:
-                set_song_db(tags_uri)
-                logger('Skipped: TrackExists - DB Tags set to None.\n')
-            elif track_exists(artist_p, track_p, logger=logger):
-                set_song_db(track_uri)
-                set_song_db(tags_uri)
-                logger('Skipped: FileExists - DB Track & Tags set to None.\n')
+                logger('Skipped: TrackExists\n')
+            elif source_uri in song_db_indices:
+                logger('Skipped: SourceExists\n')
             else:
+                skip = False
+
+            # Set song data base entries
+            set_song_db(tags_uri)
+            set_song_db(source_uri)
+            set_song_db(track_uri)
+            if not skip:
                 set_song_db(track_uri, track_tags)
-                set_song_db(tags_uri)
                 logger('Success: Song DB entries created.\n')
     # Reset and return
     logger.verbose = logger_verbose_default

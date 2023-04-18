@@ -1,5 +1,6 @@
+from setup import cookie_file
 from utils import input_is, hms2s, settings
-from settings import print_space
+from settings import print_space, preferred_quality
 from youtubesearchpython import VideosSearch
 import os
 import sys
@@ -76,11 +77,11 @@ def audio_download(youtube_url: str, audio_fname: str, logger: object = print):
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': codec,
-            'preferredquality': '192',
+            'preferredquality': preferred_quality,
         }],
         'outtmpl': fname,
+        'cookiefile': cookie_file,
     }
-
     # Attempt download
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -88,10 +89,10 @@ def audio_download(youtube_url: str, audio_fname: str, logger: object = print):
         logger('Youtube download successful')
     except BaseException as e:
         logger(f'Youtube download failed: {e}')
-        do_debug = input('>> Debug? [Yes]/No'.ljust(print_space))
-        if input_is('No', do_debug or 'Yes'):
-            sys.exit()
-        else:
-            ydl_opts['verbose'] = True
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([youtube_url])
+        # do_debug = input('>> Debug? [Yes]/No'.ljust(print_space))
+        # if input_is('No', do_debug or 'Yes'):
+        #     sys.exit()
+        # else:
+        #     ydl_opts['verbose'] = True
+        #     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        #         ydl.download([youtube_url])
