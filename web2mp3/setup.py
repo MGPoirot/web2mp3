@@ -111,7 +111,7 @@ home_dir = os.environ.get("HOME_DIR")
 music_dir = os.environ.get("MUSIC_DIR")
 daemon_dir = os.path.join(home_dir, '.daemons', 'daemon-{}.tmp')
 log_dir = os.path.join(home_dir, '.logs', '{}.json')
-song_db_file = os.path.join(home_dir, 'song_db.pkl')
+song_db_file = os.path.join(home_dir, '{}song_db.pkl')
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())

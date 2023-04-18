@@ -10,7 +10,7 @@ from settings import print_space, default_market, default_tolerance, \
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import modules
 from song_db import set_song_db, get_song_db
-from download_daemon import start_daemon
+from download_daemon import start_daemons
 from youtubesearchpython import VideosSearch
 from unidecode import unidecode
 import re
@@ -327,19 +327,19 @@ def match_audio_with_tags(track_url: str, logger: Logger,
             tags_uri = get_tags_uri(track_tags)
             artist_p, _, track_p = get_path_components(track_tags)
 
-            song_db_keys = get_song_db().keys()
-            if tags_uri in song_db_keys:
+            song_db_indices = get_song_db().index
+            if tags_uri in song_db_indices:
                 logger('Skipped: TagsExists\n')
-            elif track_uri in song_db_keys:
-                set_song_db(tags_uri, None)
+            elif track_uri in song_db_indices:
+                set_song_db(tags_uri)
                 logger('Skipped: TrackExists - DB Tags set to None.\n')
             elif track_exists(artist_p, track_p, logger=logger):
-                set_song_db(track_uri, None)
-                set_song_db(tags_uri, None)
+                set_song_db(track_uri)
+                set_song_db(tags_uri)
                 logger('Skipped: FileExists - DB Track & Tags set to None.\n')
             else:
                 set_song_db(track_uri, track_tags)
-                set_song_db(tags_uri, None)
+                set_song_db(tags_uri)
                 logger('Success: Song DB entries created.\n')
     # Reset and return
     logger.verbose = logger_verbose_default
@@ -347,6 +347,11 @@ def match_audio_with_tags(track_url: str, logger: Logger,
 
 
 def init_matching(*urls, default_response=None, platform=None):
+    n_urls = str(len(urls))
+
+    def prog(n):
+        return f'{str(n + 1).rjust( len(n_urls))}/{n_urls} '
+
     for i, url in enumerate(urls):
         # Sanitize URL
         url = url.split('&')[0]
@@ -389,16 +394,15 @@ def init_matching(*urls, default_response=None, platform=None):
             else:
                 print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
         else:  # Handling of individual tracks
-            if platform.url2uri(url) in get_song_db():
-                print(f'Skipped: {platform.name} URI exists in Song Data '
+            if platform.url2uri(url) in get_song_db().index:
+                print(f'{prog(i)}Skipped: {platform.name} URI '
+                      f'exists in Song Data '
                       'Base.\n')
                 continue
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
-            log_obj(
-                f'{i}/{len(urls)} Received new {platform.name} URL'.ljust(
-                    print_space),
-                url)
+            log_obj(f'{prog(i)}Received new {platform.name} URL'.ljust(
+                print_space), url, verbose=True)
             match_audio_with_tags(
                 track_url=url,
                 logger=log_obj,
@@ -407,7 +411,7 @@ def init_matching(*urls, default_response=None, platform=None):
                 default_response=default_response,
                 search_limit=search_limit
             )
-        start_daemon()
+        #start_daemons()
 
 
 if __name__ == '__main__':

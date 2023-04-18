@@ -4,8 +4,8 @@ import os
 from glob import glob
 from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
-from utils import Logger, get_url_platform, shorten_url, get_path_components,\
-    track_exists
+from utils import Logger, get_url_platform, get_path_components,\
+    track_exists, input_is
 import atexit
 import sys
 from multiprocessing import Process
@@ -23,7 +23,7 @@ def download_track(track_uri: str, logger=print):
     logger('Started download_track')
 
     # Retrieve and extract song properties from the song database
-    mp3_tags = get_song_db()[track_uri]
+    mp3_tags = get_song_db().loc[track_uri]
     artist_p, album_p, track_p = get_path_components(mp3_tags)
     if not track_exists(artist_p, track_p):
         # Define paths
@@ -68,7 +68,7 @@ def download_track(track_uri: str, logger=print):
         logger('File permissions set.')
     
     # Clear song_db
-    set_song_db(track_uri, None)
+    set_song_db(track_uri)
     logger('Song data base value cleared to None.')
 
     # Finish
@@ -82,14 +82,17 @@ def syscall():
         os.system('pythonw download_daemon.py background')
 
 
-def start_daemon():
-    n_daemons = len(glob(daemon_dir.format('[0-9]')))
-    if n_daemons < max_daemons:
-        p = Process(target=syscall)
-        p.start()
-        return True
-    else:
-        return False
+def start_daemons():
+    n_started = 0
+    for i, _ in zip(range(max_daemons), get_tasks()):
+        n_daemons = len(glob(daemon_dir.format('[0-9]')))
+        if n_daemons < max_daemons:
+            n_started += 1
+            p = Process(target=syscall)
+            p.start()
+        else:
+            break
+    return n_started
 
 
 def uri2path(uri: str) -> str:
@@ -100,39 +103,45 @@ def u2t(n, uri: str) -> str:
     return daemon_dir.format(f'{n}_{uri2path(uri)}')
 
 
+def get_tasks() -> list:
+    song_db = get_song_db()
+    uris = song_db[song_db.title.notna()].index  # finish
+    uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
+    return uris
+
+
 if __name__ == '__main__':
     # Accept input
-    process_mode = 'start'
-    if len(sys.argv) > 1:
-        process_mode = sys.argv[1]
+    run_mode = sys.argv[1] if len(sys.argv) > 1 else 'start'
+    run_mode = 'verbose' if run_mode == '--mode=client' else run_mode
 
     # Start daemon
-    if process_mode == 'start':
-        daemon_started = start_daemon()
-        daemon_started = '' if daemon_started else 'No '
-        print(f'{daemon_started}Daemon started')
+    if input_is('Start', run_mode):
+        daemon_started = start_daemons()
+        print(f'{daemon_started} Daemons started.')
     else:  # Run Daemon (special case is process_mode == verbose)
         daemon_n = len(glob(daemon_dir.format('[0-9]')))
-        daemon_tmp = Logger(daemon_dir.format(daemon_n))
-        atexit.register(daemon_tmp.rm)
-        tried = []
-        while True:
-            song_db = get_song_db()
-            uris = [u for u, tags in song_db.items() if tags is not None]  # finish
-            uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
-            uris = [u for u in uris if not u in tried]  # max tries
-            if any(uris):
-                task = uris[0]
-                tried.append(task)
-                task_tmp = Logger(u2t(daemon_n, task))
-                atexit.register(task_tmp.rm)
-                logger_path = log_dir.format(uri2path(task))
-                if not process_mode == 'verbose':
-                    sys.stdout = open(logger_path.replace('json', 'txt'), "w")
-                log_obj = Logger(logger_path, verbose=True)
-                download_track(task, logger=log_obj)
-                task_tmp.rm()
-            else:
-                break
-            if process_mode == 'verbose':
-                break
+        daemon_name = daemon_dir.format(daemon_n)
+        if not os.path.isfile(daemon_name):
+            daemon_tmp = Logger(daemon_name)
+            atexit.register(daemon_tmp.rm)
+            tried = []
+            while True:
+                uris = get_tasks()
+                uris = [u for u in uris if not u in tried]  # max tries
+                if any(uris):
+                    task = uris[0]
+                    tried.append(task)
+                    task_tmp = Logger(u2t(daemon_n, task))
+                    atexit.register(task_tmp.rm)
+                    logger_path = log_dir.format(uri2path(task))
+                    if not input_is('Verbose', run_mode):
+                        sys.stdout = open(logger_path.replace('json', 'txt'), "w")
+                    log_obj = Logger(logger_path, verbose=True)
+                    download_track(task, logger=log_obj)
+                    task_tmp.rm()
+                else:
+                    print('No unprocessed URIs found.')
+                    break
+                if input_is('Verbose', run_mode):
+                    break
