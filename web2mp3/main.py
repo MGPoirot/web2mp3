@@ -310,7 +310,13 @@ def match_audio_with_tags(track_url: str, logger: Logger,
     query = source_module.get_description(track_url, logger,
                                           market) if source_module else None
     if query is None:
-        logger(f'Failed: No {input_platform} query for matching.')
+        logger(f'Failed: No {input_platform} query for matching.\n')
+    elif query.duration == 0 or \
+            query.title == '' or \
+            query.album == '' or \
+            query.artist == '':
+        logger(f'Skipped: URL refers to empty object.\n')
+        set_song_db(source_module.url2uri(track_url))
     else:
         match_obj = lookup(query=query,
                            platform=search_module.name,
@@ -350,7 +356,7 @@ def init_matching(*urls, default_response=None, platform=None):
     n_urls = str(len(urls))
 
     def prog(n):
-        return f'{str(n + 1).rjust( len(n_urls))}/{n_urls} '
+        return f'{str(n + 1).rjust(len(n_urls))}/{n_urls} '
 
     for i, url in enumerate(urls):
         # Sanitize URL
