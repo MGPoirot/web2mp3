@@ -25,7 +25,12 @@ def download_track(track_uri: str, logger=print):
     # Retrieve and extract song properties from the song database
     mp3_tags = get_song_db().loc[track_uri]
     artist_p, album_p, track_p = get_path_components(mp3_tags)
-    if not track_exists(artist_p, track_p):
+
+    file_exists = False
+    if track_exists(artist_p, track_p):
+        file_exists = True
+        logger('Skipped: FileExists')
+    else:
         # Define paths
         album_dir = os.path.join(music_dir, artist_p, album_p)
         tr_prefix = None if mp3_tags.track_num is None else f'{mp3_tags.track_num} - '
@@ -60,19 +65,23 @@ def download_track(track_uri: str, logger=print):
         download_method.audio_download(track_url, mp3_fname, logger=logger)
 
         # Set file tags
-        set_file_tags(mp3_tags, mp3_fname, audio_source_url=track_url, logger=logger)
+        if os.path.isfile(mp3_fname):
+            file_exists=True
+            set_file_tags(mp3_tags, mp3_fname, audio_source_url=track_url, logger=logger)
 
         # Potentially fix permissions
         for restricted_path in (album_dir, mp3_fname, cov_fname):
             os.chmod(restricted_path, 0o0777)  # TODO: set proper file permissions! 755
         logger('File permissions set.')
-    
-    # Clear song_db
-    set_song_db(track_uri)
-    logger('Song data base value cleared to None.')
 
-    # Finish
-    logger('daemon_download.py finished successfully')
+    # Conclude
+    if file_exists:
+        set_song_db(track_uri)
+        logger('Song data base value cleared to None.')
+        conclusion = 'finished successfully.'
+    else:
+        conclusion = 'failed.'
+    logger(f'download_track {conclusion}')
 
 
 def syscall():
@@ -120,9 +129,11 @@ if __name__ == '__main__':
         daemon_started = start_daemons()
         print(f'{daemon_started} Daemons started.')
     else:  # Run Daemon (special case is process_mode == verbose)
-        daemon_n = len(glob(daemon_dir.format('[0-9]')))
-        daemon_name = daemon_dir.format(daemon_n)
-        if not os.path.isfile(daemon_name):
+        daemon_ns = [i for i in range(max_daemons) if not os.path.isfile(
+            daemon_dir.format(i))]
+        if any(daemon_ns):
+            daemon_n = daemon_ns[0]
+            daemon_name = daemon_dir.format(daemon_n)
             daemon_tmp = Logger(daemon_name)
             atexit.register(daemon_tmp.rm)
             tried = []
