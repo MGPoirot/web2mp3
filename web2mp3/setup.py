@@ -4,6 +4,8 @@ from importlib.machinery import SourceFileLoader
 import os
 import spotipy
 import eyed3
+import re
+from glob import glob
 eyed3.log.setLevel("ERROR")
 
 
@@ -22,6 +24,24 @@ def import_settings():
         raise FileNotFoundError('Settings file "settings.txt" is missing.')
     settings_module = SourceFileLoader('settings', settings_path)
     return settings_module.load_module()
+
+
+def set_in_dot_env(key: str, value: str, overwrite=True):
+    key = key.upper()
+    with open('.env', 'r') as f:
+        data = f.read()
+    old_entries = re.findall(f"{key}=.*?\n", data)
+    if not any(old_entries) or not overwrite:
+        with open('.env', 'a') as f:
+            f.write(f'{key}={value}\n')
+        return
+    elif len(old_entries) > 1:
+        print(f'ValueWarning: Key "{key}" found {len(old_entries)} times. '
+              f'Replace is ambiguous. Replacing last entry.')
+    old_entry = old_entries[-1]
+    data.replace(old_entry, f'{key}={value}\n')
+    with open('file.txt', 'w') as file:
+        file.write(data)
 
 
 def run_setup_wizard():
@@ -80,13 +100,13 @@ def run_setup_wizard():
                            f'    {d_fmt}\n')
             answer = default if not answer and default else answer
             if validator(answer):
-                with open('.env', 'a') as f:
-                    f.write(f'{k}={repr(answer)}\n')
+                set_in_dot_env(key=k, value=repr(answer))
                 break
             else:
                 print(f'     "{answer}" is not a valid {question}')
     print('Secrets successfully stored.\n'
           'Web2MP3 set up successful.')
+
 
 
 # Import public settings
@@ -112,6 +132,17 @@ music_dir = os.environ.get("MUSIC_DIR")
 daemon_dir = os.path.join(home_dir, '.daemons', 'daemon-{}.tmp')
 log_dir = os.path.join(home_dir, '.logs', '{}.json')
 song_db_file = os.path.join(home_dir, '{}song_db.pkl')
+
+if os.environ.get("COOKIE_FILE") is None:
+    cookie_files = glob(os.path.join(home_dir, '**' '*_cookies.txt'))
+    if any(cookie_files):
+        set_in_dot_env("COOKIE_FILE", cookie_files[0])
+    else:
+        cookie_file = None
+else:
+    cookie_file = os.environ.get("COOKIE_FILE")
+    if not os.path.isfile(os.environ.get("COOKIE_FILE")):
+        raise FileNotFoundError(f'Cookie file "{cookie_file}" not found.')
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())

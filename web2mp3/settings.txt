@@ -5,3 +5,4 @@ default_tolerance = 0.10
 default_market = "NL"
 search_limit = 5
 max_time_outs = 10
+preferred_quality = 320
