@@ -9,9 +9,14 @@ target = 'tags'
 
 def playlist_handler(url: str) -> list:
     pl_uri = url2uri(url, raw=True)
-    playlist_items = spotify_api.playlist(pl_uri)['tracks']['items']
+    playlist_items = []
+    results = spotify_api.playlist(pl_uri)['tracks']
+    while results['next']:
+        results = spotify_api.next(results)
+        playlist_items.extend(results['items'])
     playlist_urls = [uri2url(t['track']['id']) for t in playlist_items]
     return playlist_urls
+
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
     track_uri = youtube.url2uri(matched_obj.track_url)
