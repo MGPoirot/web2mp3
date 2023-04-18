@@ -1,5 +1,5 @@
 from setup import music_dir, settings
-from settings import print_space
+from settings import print_space, max_time_outs
 import pickle
 import os
 import inspect
@@ -11,6 +11,7 @@ import pandas as pd
 import re
 from glob import iglob
 eyed3.log.setLevel("ERROR")
+from time import sleep
 
 
 
@@ -321,7 +322,7 @@ def track_exists(artist_p: str, track_p: str, logger: object = print) -> bool:
     if any(existing_tracks):
         logger('FileExistsWarning:')
         for i, et in enumerate(existing_tracks, 1):
-            logger(f'{i})'.rjust(print_space), f'{et[len(music_dir):]}')
+            logger(f'   {i})'.rjust(print_space), f'{et[len(music_dir):]}')
     return any(existing_tracks)
 
 
@@ -330,6 +331,21 @@ def get_path_components(mp3_tags: pd.Series) -> list:
      (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
 
 
+def timeout_handler(func, *args, **kwargs):
+    outcome = None
+    n_timeouts = 0
+    while outcome is None:
+        try:
+            outcome = func(*args, **kwargs)
+            return outcome
+        except TimeoutError:
+            n_timeouts += 1
+            print(f'Encountered a TimeOutError... '
+                  f'waiting {n_timeouts}/{max_time_outs}')
+            if n_timeouts > max_time_outs:
+                return None
+            else:
+                sleep(1)
 
 
 
