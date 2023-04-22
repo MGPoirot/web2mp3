@@ -13,7 +13,16 @@ playlist_identifier = '/playlist/'
 album_identifier = '/album/'
 
 
-def general_handler(url, method):
+def general_handler(url: str, method) -> list:
+    """
+    Handles objects containing multipe tracks such as playlists and albums.
+    Returns a list of track URLs
+    :param url:     Object url
+    :type url:      str
+    :param method:  Method to call on the spotify_api
+    :type method:   function
+    :return:
+    """
     uri = url2uri(url, raw=True)
     results = timeout_handler(method, uri)['tracks']
     object_items = results['items']
@@ -27,25 +36,30 @@ def general_handler(url, method):
 
 
 def playlist_handler(url: str) -> list:
+    # Forwards the playlist method to the general_handle
     return general_handler(url, spotify_api.playlist)
 
 
 def album_handler(url: str) -> list:
+    # Forwards the album method to the general_handle
     return general_handler(url, spotify_api.album)
 
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
+    # Sorts the mp3 URL and track tags
     track_uri = youtube.url2uri(matched_obj.track_url)
     track_tags = query
     return track_uri, track_tags
 
 
 def get_search_platform():
+    # Returns the module that handles the search platform
     from modules import youtube
     return youtube
 
 
-def get_description(track_url, logger, market='NL'):
+def get_description(track_url: str, logger, market='NL') -> pd.Series:
+    # Gets information about the track that will be used as query for matching
     item = timeout_handler(spotify_api.track, track_url, market=market)
     track_tags = get_track_tags(item, logger=logger, do_light=False)
     query = track_tags

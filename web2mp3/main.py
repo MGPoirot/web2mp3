@@ -1,6 +1,6 @@
 from setup import log_dir, spotify_api, settings
 from settings import print_space, default_market, default_tolerance, \
-    search_limit, init_daemons
+    search_limit, init_daemons, do_overwrite
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
     get_path_components, track_exists
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
@@ -330,11 +330,14 @@ def match_audio_with_tags(track_url: str, logger: Logger,
             tags_uri = get_tags_uri(track_tags)
             source_uri = source_module.url2uri(track_url)  # 1 id may >1  urls
 
-            # File exists
+            #  Check if the track is already in the database
             song_db_indices = get_song_db().index
             artist_p, _, track_p = get_path_components(track_tags)
+
             skip = True
-            if track_exists(artist_p, track_p, logger=logger):
+            if not do_overwrite:
+                skip = False
+            elif track_exists(artist_p, track_p, logger=logger):
                 logger('Skipped: FileExists\n')
             elif tags_uri in song_db_indices:
                 logger('Skipped: TagsExists\n')
@@ -345,34 +348,40 @@ def match_audio_with_tags(track_url: str, logger: Logger,
             else:
                 skip = False
 
-            # Set song data base entries
+            # Set song database entries
             set_song_db(tags_uri)
             set_song_db(source_uri)
             set_song_db(track_uri)
             if not skip:
                 set_song_db(track_uri, track_tags)
                 logger('Success: Song DB entries created.\n')
+
     # Reset and return
     logger.verbose = logger_verbose_default
     return
 
 
 def init_matching(*urls, default_response=None, platform=None):
+    # Get the number of URLs to match
     n_urls = str(len(urls))
 
+    # Define a shorthand for printing progress
     def prog(n):
         return f'{str(n + 1).rjust(len(n_urls))}/{n_urls} '
 
     for i, url in enumerate(urls):
         # Sanitize URL
         url = url.split('&')[0]
+
+        # Skip empty URL
         if not url:
             continue
 
-        # Identify the domain
+        # Identify the platform where the URL is from
         if platform is None:
             platform = import_module(f'modules.{get_url_platform(url)}')
 
+        # Check if the URL is a reference to a batch of tracks
         if platform.playlist_identifier in url or\
            platform.album_identifier in url:
             if platform.playlist_identifier in url:
@@ -406,16 +415,21 @@ def init_matching(*urls, default_response=None, platform=None):
                 default_response=default_response,
                 platform=platform
             )
-        else:  # Handling of individual tracks
+        else:
+            # Skip in case the URL is already in the database
             if platform.url2uri(url) in get_song_db().index:
                 print(f'{prog(i)}Skipped: {platform.name} URI '
                       f'exists in Song Data '
                       'Base.\n')
                 continue
+
+            # Create a logger object for this URL
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
             log_obj(f'{prog(i)}Received new {platform.name} URL'.ljust(
                 print_space), url, verbose=True)
+
+            # Match the URL with its counterpart
             match_audio_with_tags(
                 track_url=url,
                 logger=log_obj,
@@ -424,6 +438,8 @@ def init_matching(*urls, default_response=None, platform=None):
                 default_response=default_response,
                 search_limit=search_limit
             )
+
+        # Start the daemons during the matching of further items
         if input_is('During', init_daemons):
             start_daemons()
 
@@ -438,8 +454,11 @@ if __name__ == '__main__':
             else:
                 init_matching(*input_url.split(' '))
     else:
+        # Send the URL straight to the matching function
         input_urls = sys.argv[1:]
         init_matching(*input_urls)
+
+        # Start the daemons during the matching of all items
         if input_is('After', init_daemons):
             start_daemons()
 

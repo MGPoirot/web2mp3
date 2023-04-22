@@ -35,9 +35,7 @@ def get_song_db() -> dict:
 
 
 def set_song_db(uri: str, value=None):
-    """
-    Set a value to a key (=short URL) in the song database
-    """
+    """ Set a value to a key (=short URL) in the song database """
     song_db = get_song_db()
     song_db.loc[uri] = pd.Series(value, dtype='O')
     song_db.to_pickle(song_db_file.format(''))
