@@ -14,8 +14,6 @@ eyed3.log.setLevel("ERROR")
 from time import sleep
 
 
-
-
 def hms2s(hhmmss: str) -> int:
     """
     Converts a string representing time in the format "hh:mm:ss" to seconds.
@@ -310,7 +308,7 @@ def rm_char(text: str) -> str:
     """
     for char in '.#%&{}\<>*?/$!":@|`|=\'':
         text = text.replace(char, '')
-    return text
+    return text.strip()
 
 
 def track_exists(artist_p: str, track_p: str, logger: object = print) -> bool:
@@ -327,11 +325,24 @@ def track_exists(artist_p: str, track_p: str, logger: object = print) -> bool:
 
 
 def get_path_components(mp3_tags: pd.Series) -> list:
+    # Returns the path valid components required to create the file path for
+    # storing from a mp3 tags pandas series
     return [rm_char(f) for f in
      (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
 
 
 def timeout_handler(func, *args, **kwargs):
+    """
+    The Spotify API might return HTTPSTimeOutErrors, not frequently, but it can
+    happen. In these cases, we do not want to give up and call the entire
+    matching process quits right away. Instead, we wait for a second and try
+    again. This number defines how many times we will reattempt before we give
+    up.
+    :param func:    Spotify API method to perform
+    :param args:    args to func
+    :param kwargs:  kwargs to func
+    :return:        None
+    """
     outcome = None
     n_timeouts = 0
     while outcome is None:

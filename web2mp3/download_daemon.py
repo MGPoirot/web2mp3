@@ -1,11 +1,12 @@
-from setup import music_dir, daemon_dir, log_dir
-from settings import print_space, max_daemons
+from setup import music_dir, daemon_dir, log_dir, settings
+from settings import print_space, max_daemons, verbose, verbose_single
+from utils import Logger, get_url_platform, get_path_components,\
+    track_exists, input_is
 import os
 from glob import glob
 from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
-from utils import Logger, get_url_platform, get_path_components,\
-    track_exists, input_is
+
 import atexit
 import sys
 from multiprocessing import Process
@@ -39,9 +40,9 @@ def download_track(track_uri: str, logger=print):
         os.makedirs(album_dir, mode=0o777, exist_ok=True)
 
         # Log storage locations
-        logger('Album dir'.ljust(print_space), album_dir)
-        logger('Cover filename    '.ljust(print_space), cov_fname)
-        logger('MP3 Audio filename'.ljust(print_space), mp3_fname)
+        logger('Album dir'.ljust(print_space), f'"{album_dir}"')
+        logger('Cover filename    '.ljust(print_space), f'"{cov_fname}"')
+        logger('MP3 Audio filename'.ljust(print_space), f'"{mp3_fname}"')
 
         # Download cover
         if not 'cover' in mp3_tags:
@@ -85,13 +86,23 @@ def download_track(track_uri: str, logger=print):
 
 
 def syscall():
-    if os.name == 'posix':
-        os.system('python download_daemon.py background &')
+    if verbose:
+        if os.name == 'posix':
+            os.system(f'python download_daemon.py verbose')
+        else:
+            os.system(f'python download_daemon.py verbose')
     else:
-        os.system('pythonw download_daemon.py background')
+        if os.name == 'posix':
+            os.system(f'python download_daemon.py background &')
+        else:
+            os.system(f'pythonw download_daemon.py background')
 
 
 def start_daemons():
+    if verbose:
+        syscall()
+        return 1
+
     n_started = 0
     for i, _ in zip(range(max_daemons), get_tasks()):
         n_daemons = len(glob(daemon_dir.format('[0-9]')))
@@ -161,5 +172,5 @@ if __name__ == '__main__':
                 else:
                     print('No unprocessed URIs found.')
                     break
-                if input_is('Verbose', run_mode):
+                if verbose_single and verbose:
                     break

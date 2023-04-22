@@ -1,7 +1,7 @@
-import pandas as pd
-from setup import spotify_api
-from utils import input_is, flatten, timeout_handler, settings
+from setup import spotify_api, settings
 from settings import print_space
+from utils import input_is, flatten, timeout_handler
+import pandas as pd
 from datetime import datetime
 import eyed3
 import requests
@@ -100,8 +100,9 @@ def download_cover_img(cover_img_path: str, cover_img_url: str, logger=print):
         try:
             with open(cover_img_path, 'wb') as f:
                 shutil.copyfileobj(res.raw, f)
-            logger('Image Downloaded'.ljust(print_space), cover_img_path)
-        except FileNotFoundError:
-            raise FileNotFoundError('This folder was not suitable.')
+            logger('Image Downloaded'.ljust(print_space), f'"{cover_img_path}"')
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f'This folder was not suitable: "'
+                                    f'{cover_img_path}"')
     else:
         raise ConnectionError('Album cover image could not be retrieved.')

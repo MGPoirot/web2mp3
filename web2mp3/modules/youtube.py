@@ -1,16 +1,22 @@
-from setup import cookie_file
-from utils import input_is, hms2s, settings
+from setup import cookie_file, settings
 from settings import print_space, preferred_quality
+from utils import hms2s
 from youtubesearchpython import VideosSearch
 import os
-import sys
 import yt_dlp
 import pandas as pd
 import pytube
 
 name = 'youtube'
 target = 'track'
+
+# Identifier substrings should be defined strictly enough that a URL from
+# this platform can never contain this substring without being of this type.
+playlist_identifier = '/playlist?'
+album_identifier = ' '  # YouTube does not have album object types
+
 playlist_handler = pytube.Playlist
+album_handler = lambda album_url: _
 
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
@@ -67,7 +73,7 @@ def get_description(track_url: str, logger: object = print, *kwargs) -> str:
     return description
 
 
-def audio_download(youtube_url: str, audio_fname: str, logger: object = print):
+def audio_download(youtube_url: str, audio_fname: str, logger=print):
     # ydl does not need the extension
     fname, codec = audio_fname.split(os.extsep)
 
@@ -89,10 +95,6 @@ def audio_download(youtube_url: str, audio_fname: str, logger: object = print):
         logger('Youtube download successful')
     except BaseException as e:
         logger(f'Youtube download failed: {e}')
-        # do_debug = input('>> Debug? [Yes]/No'.ljust(print_space))
-        # if input_is('No', do_debug or 'Yes'):
-        #     sys.exit()
-        # else:
-        #     ydl_opts['verbose'] = True
-        #     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        #         ydl.download([youtube_url])
+        if not cookie_file:
+            logger('Warning: No COOKIE_FILE was found. Without COOKIE_FILE '
+                   'file restricted download will fail.')

@@ -1,5 +1,5 @@
-from utils import timeout_handler
 from setup import spotify_api
+from utils import timeout_handler
 from tag_manager import get_track_tags
 import pandas as pd
 from modules import youtube
@@ -7,16 +7,31 @@ from modules import youtube
 name = 'spotify'
 target = 'tags'
 
+# Identifier substrings should be defined strictly enough that a URL from
+# this platform can never contain this substring without being of this type.
+playlist_identifier = '/playlist/'
+album_identifier = '/album/'
 
-def playlist_handler(url: str) -> list:
-    pl_uri = url2uri(url, raw=True)
-    playlist_items = []
-    results = timeout_handler(spotify_api.playlist, pl_uri)['tracks']
+
+def general_handler(url, method):
+    uri = url2uri(url, raw=True)
+    results = timeout_handler(method, uri)['tracks']
+    object_items = results['items']
     while results['next']:
         results = spotify_api.next(results)
-        playlist_items.extend(results['items'])
-    playlist_urls = [uri2url(t['track']['id']) for t in playlist_items]
-    return playlist_urls
+        object_items.extend(results['items'])
+    if 'track' in object_items[0]:
+        object_items = [i['track'] for i in object_items]
+    object_urls = [uri2url(t['id']) for t in object_items]
+    return object_urls
+
+
+def playlist_handler(url: str) -> list:
+    return general_handler(url, spotify_api.playlist)
+
+
+def album_handler(url: str) -> list:
+    return general_handler(url, spotify_api.album)
 
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
