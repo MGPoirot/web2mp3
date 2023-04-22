@@ -1,14 +1,14 @@
 """
 # Public general default settings
-You can change values in this file to change the default behaviour
-For considerations and options see "settings_details.md".
+You can change values in this file to change the default behaviour.
+For considerations and options the "README.md".
 
-This file is loaded using importlin.machinery.SourceFileLoader.
+This file is loaded using importlib.machinery.SourceFileLoader.
 Thus, this file should be formatted as if it were Python code.
 """
 
 ## 1. DAEMON settings
-max_daemons         = 4             # number of DAEMONs to spawn as integer
+max_daemons         = 4             # Number of DAEMONs to spawn as integer
 init_daemons        = 'during'      # When to initiate DAEMONs as string
 
 ## 2. Verbose mode
