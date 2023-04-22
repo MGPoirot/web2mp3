@@ -33,9 +33,10 @@ Alternatively you can call the program straight from the command line. The progr
 * Single track call:
   * `python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ`
   * `python main.py https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM`
-* Single playlist call:
+* Single playlist or album call:
   * `python main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
   * `python main.py https://open.spotify.com/playlist/37i9dQZF1E4ynkTq5aVuVE`
+  * `python main.py https://open.spotify.com/album/6O7y09nb8sWjqQBkPqSOg1`
 * Multiple calls, separated by spaces:
   * `python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM`
 
@@ -71,7 +72,7 @@ matching audio with meta-data is not interrupted.
 
 After each match, songs are stored in the song data base (SDB). DAEMONs will
 attempt to process any unprocessed song the the SDB and finish when there is
-nothing left. Since DAEMONs are headless by defautl, they store logbooks to the
+nothing left. Since DAEMONs are headless by default, they store logbooks to the
 `.log` directory.
 
 * `init_daemons` When to initiate DAEMONs as string, not case sensitive. 
@@ -113,7 +114,8 @@ are being processed. Therefor, there is the option to run in verbose mode:
     Initiate a single process and print the logging data to the console.
 
 * `verbose_single` Whether to only perform a single item when in verbose 
-  mode as boolean
+  mode as Boolean
+  
     1. `True` (default)   
   
       Only process a single item, then return. If your sole intent is to check 
@@ -129,7 +131,7 @@ are being processed. Therefor, there is the option to run in verbose mode:
 
 ### 3. Matching Settings
 An important part of this tool is to match the audio to Spotify meta-data, or
-inversely, find the right audio to download to a spotify track.
+inversely, find the right audio to download to a Spotify track.
 
 * `default_tolerance` Accepted duration difference as float.
     The percentage difference that the Spotify meta-data and the audio can have
@@ -150,10 +152,10 @@ inversely, find the right audio to download to a spotify track.
     matching attempt a single call is made, this increases the API call for all
     matching attempts. A higher number increases the chance of finding a
     acceptable match. However, since results are returned in order of relevance,
-    the effectiveness of these comparissons in general decreases, increasing
+    the effectiveness of these comparisons in general decreases, increasing
     compute, computation time, network traffic and chance on time out errors.
 
-* `avoid_duplicates` Whether to skip a track if it exists as boolean. Options:
+* `avoid_duplicates` Whether to skip a track if it exists as Boolean. Options:
     1. `True` (default)   
     By default, we will look in our MUSIC_DIR to see if a track exists already
     using `utils.track_exists`. This avoids downloading the same track twice if
