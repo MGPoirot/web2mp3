@@ -20,6 +20,7 @@ default_tolerance   = 0.10          # Accepted duration difference as float
 default_market      = "NL"          # Spotify API market as string
 search_limit        = 5             # Number of tracks to check for match as int
 avoid_duplicates    = True          # Whether to skip if track is found to exist
+do_overwrite        = False         # Whether to process a URL if it exists
 
 ## 4. Other
 print_space         = 24            # Whitespaces used when logging as integer

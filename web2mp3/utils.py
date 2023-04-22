@@ -312,6 +312,8 @@ def rm_char(text: str) -> str:
 
 
 def track_exists(artist_p: str, track_p: str, logger: object = print) -> bool:
+    if not avoid_duplicates:
+        return False
     # Check if this song is already available, maybe in a different album
     pattern = re.compile(re.escape(track_p).replace(r'\ ', r'[\s_]*'),
                          re.IGNORECASE | re.UNICODE)
