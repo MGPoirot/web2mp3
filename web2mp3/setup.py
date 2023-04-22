@@ -108,7 +108,6 @@ def run_setup_wizard():
           'Web2MP3 set up successful.')
 
 
-
 # Import public settings
 settings = import_settings()
 
@@ -133,16 +132,25 @@ daemon_dir = os.path.join(home_dir, '.daemons', 'daemon-{}.tmp')
 log_dir = os.path.join(home_dir, '.logs', '{}.json')
 song_db_file = os.path.join(home_dir, '{}song_db.pkl')
 
+# Check if a COOKIE_FILE is set
 if os.environ.get("COOKIE_FILE") is None:
+    # If it is not set, check if it exists.
     cookie_files = glob(os.path.join(home_dir, '**' '*_cookies.txt'))
     if any(cookie_files):
+        # If it exists, write its location to the .env file
         set_in_dot_env("COOKIE_FILE", cookie_files[0])
-    else:
-        cookie_file = None
-else:
-    cookie_file = os.environ.get("COOKIE_FILE")
+
+# Load COOKIE_FILE value from .env file
+cookie_file = os.environ.get("COOKIE_FILE")
+if cookie_file:
     if not os.path.isfile(os.environ.get("COOKIE_FILE")):
-        raise FileNotFoundError(f'Cookie file "{cookie_file}" not found.')
+        raise print(f'FileNotFoundWarning: Cookie file "{cookie_file}" not '
+                    f'found.')
+
+# Give the user a warning of the limitations of not setting a COOKIE_FILE
+if cookie_file is None:
+    print('Warning: No COOKIE_FILE was found. Without COOKIE_FILE age '
+          'restricted download will fail.')
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())

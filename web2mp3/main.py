@@ -1,19 +1,17 @@
-import sys
-import pandas as pd
-import pytube
-from time import sleep
-from setup import log_dir, spotify_api
+from setup import log_dir, spotify_api, settings
+from settings import print_space, default_market, default_tolerance, \
+    search_limit, init_daemons
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
     get_path_components, track_exists
-from settings import print_space, default_market, default_tolerance, \
-    search_limit
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
-import modules
+import sys
+import pandas as pd
+import re
+from time import sleep
 from song_db import set_song_db, get_song_db
 from download_daemon import start_daemons
 from youtubesearchpython import VideosSearch
 from unidecode import unidecode
-import re
 from importlib import import_module
 
 
@@ -309,12 +307,11 @@ def match_audio_with_tags(track_url: str, logger: Logger,
     # Perform matching and check results
     query = source_module.get_description(track_url, logger,
                                           market) if source_module else None
+    # If there query contains this field it cannot be empty or zero.
+    req_fields = ['duration', 'title', 'album', 'artist']
     if query is None:
         logger(f'Failed: No {input_platform} query for matching.\n')
-    elif query.duration == 0 or \
-            query.title == '' or \
-            query.album == '' or \
-            query.artist == '':
+    elif any([not bool(query[c]) for c in req_fields if c in query]):
         logger(f'Skipped: URL refers to empty object.\n')
         set_song_db(source_module.url2uri(track_url))
     else:
@@ -376,37 +373,39 @@ def init_matching(*urls, default_response=None, platform=None):
         if platform is None:
             platform = import_module(f'modules.{get_url_platform(url)}')
 
-        if 'playlist' in url:  # Handling of playlists
-            # Get playlist items
-            playlist_urls = platform.playlist_handler(url)
-
-            # Ask if to continue
-            do_playlist = input(
-                f'>>> Received playlist with {len(playlist_urls)} items. '
-                f'Proceed? [Yes]/No  '.ljust(print_space))
-            if input_is('No', do_playlist):
-                print('Playlist skipped.')
-                continue
-            elif input_is('Yes', do_playlist) or not do_playlist:
-                default_response = input(
-                    '>>> Set default response procedure?: [None]/1/Abort  '
-                    ''.ljust(print_space)) or None
-                if default_response is None:
-                    pass
-                elif input_is('None', default_response):
-                    default_response = None
-                elif not input_is('1', default_response) and not input_is(
-                        'Abort', default_response):
-                    print('Invalid input:'.ljust(print_space),
-                          f'"{default_response}"')
-                    default_response = None
-                init_matching(
-                    *playlist_urls,
-                    default_response=default_response,
-                    platform=platform
-                )
+        if platform.playlist_identifier in url or\
+           platform.album_identifier in url:
+            if platform.playlist_identifier in url:
+                # Get playlist items
+                urls = platform.playlist_handler(url)
+                found_obj = 'playlist'
+            elif platform.album_identifier in url:
+                urls = platform.album_handler(url)
+                found_obj = 'album'
             else:
-                print('Invalid input:'.ljust(print_space), f'"{do_playlist}"')
+                print('Failed to assign an appropriate batch handler.')
+                continue
+
+            # Make sure we do not start some big batch job without checking
+            # if the user is ok with it.
+            print(f'>>> Received {found_obj} with {len(urls)} items. ')
+            default_response = input(
+                '>>> Set default response procedure?: [None]/1/Abort  '
+                ''.ljust(print_space)) or None
+            if default_response is None:
+                pass
+            elif input_is('None', default_response):
+                default_response = None
+            elif not input_is('1', default_response) and not input_is(
+                    'Abort', default_response):
+                print('Invalid input:'.ljust(print_space),
+                      f'"{default_response}"')
+                default_response = None
+            init_matching(
+                *urls,
+                default_response=default_response,
+                platform=platform
+            )
         else:  # Handling of individual tracks
             if platform.url2uri(url) in get_song_db().index:
                 print(f'{prog(i)}Skipped: {platform.name} URI '
@@ -425,7 +424,8 @@ def init_matching(*urls, default_response=None, platform=None):
                 default_response=default_response,
                 search_limit=search_limit
             )
-        start_daemons()
+        if input_is('During', init_daemons):
+            start_daemons()
 
 
 if __name__ == '__main__':
@@ -440,6 +440,8 @@ if __name__ == '__main__':
     else:
         input_urls = sys.argv[1:]
         init_matching(*input_urls)
+        if input_is('After', init_daemons):
+            start_daemons()
 
 # os.system(f'sudo su plex -s /bin/bash')
 # We will want to use the API for scanning:
