@@ -10,7 +10,7 @@ Easiest is calling `python main.py` which will start the Python Wizard that will
 ```python
 >>> URL or [Abort]?      https://www.youtube.com/watch?v=NgE5mEQiizQ
 Searching Spotify for    Dirty South Hip Hop - Royalty Free Music - Topic
-                         1) Dirty South - PANDSHAFT							 87%
+                         1) Dirty South - PANDSHAFT                          87%
                          2) Dirty South Hip Hop - Royalty Free Music        100%
 Clear Spotify match      Dirty South Hip Hop - Royalty Free Music Instrumentals and Horror Soundscapes - Royalty Free Music
 Success: Song DB entry created.
