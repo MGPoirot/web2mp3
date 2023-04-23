@@ -345,7 +345,12 @@ def init_matching(*urls, default_response=None, platform=None):
 
         # Identify the platform where the URL is from
         if platform is None:
-            platform = import_module(f'modules.{get_url_platform(url)}')
+            platform_name = get_url_platform(url)
+            if platform_name is None:
+                print('Failed to identify the platform.\n ')
+                continue
+            else:
+                platform = import_module(f'modules.{platform_name}')
 
         # Check if the URL is a reference to a batch of tracks
         if platform.playlist_identifier in url or\
