@@ -28,10 +28,18 @@ def import_settings():
 
 def set_in_dot_env(key: str, value: str, overwrite=True):
     key = key.upper()
-    with open('.env', 'r') as f:
-        data = f.read()
+    if not os.path.isfile('.env'):
+        # Write first entry
+        with open('.env', 'w') as f:
+            f.write(f'{key}={value}\n')
+        return
+    else:
+        with open('.env', 'r') as f:
+            data = f.read()
+
     old_entries = re.findall(f"{key}=.*?\n", data)
     if not any(old_entries) or not overwrite:
+        # Append new entry
         with open('.env', 'a') as f:
             f.write(f'{key}={value}\n')
         return
