@@ -12,12 +12,17 @@ def get_song_db() -> dict:
     The song_db is used to store song properties for them to be processed and
     URLs of past processes in order to avoid processing them twice.
     """
-    # Load the song data base is it exists
+    # Load the song database is it exists
     sdb_path = song_db_file.format('')
     tmp_path = song_db_file.format('.')
 
     if not os.path.isfile(sdb_path):
-        pd.DataFrame().to_pickle(sdb_path)
+        pd.DataFrame(
+            columns=['title', 'album', 'album_artist', 'duration', 'bpm',
+                     'artist', 'internet_radio_url', 'cover', 'disc_num',
+                     'genre', 'release_date', 'recording_date', 'tagging_date',
+                     'track_num']
+        ).to_pickle(sdb_path)
     try:
         # Test if the file can be loaded
         sdb = pd.read_pickle(sdb_path)
