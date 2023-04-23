@@ -2,7 +2,7 @@ from setup import log_dir, spotify_api, settings
 from settings import print_space, default_market, default_tolerance, \
     search_limit, init_daemons, do_overwrite
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
-    get_path_components, track_exists
+    get_path_components, track_exists, sanitize_track_name
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
 import pandas as pd
@@ -15,40 +15,6 @@ from unidecode import unidecode
 from importlib import import_module
 
 
-def sanitize_track_name(track_name: str) -> str:
-    """Removes common words and phrases from a given track name and returns a
-    sanitized string in lower case.
-
-    Args:
-        :param track_name: A string representing the original track name.
-        :type track_name: str
-
-    Returns:
-        :return A string representing the sanitized track name.
-        :rtype str
-
-    This function removes the following words and phrases from the track name:
-    remastered, remaster, single, special, radio, "- edit", "(stereo)"
-    And the following if they appear after any of the above words:
-    - version, edit, mix
-    Additionally, any 4-digit year preceeding or following above words is
-    removed from string.
-
-    Example:
-    > sanitize_track_name("Bohemian Rhapsody - Remastered 2011")
-    "Bohemian Rhapsody"
-    """
-    words_to_remove = ['remastered', 'remaster', 'single', 'special', 'radio',
-                       '- edit', 'stereo', 'digital']
-    second_words = [' version', ' edit', ' mix', 'remaster', '']
-    track_name = track_name.lower()
-    year_pattern = re.compile(r'(19|20)\d{2}\b', flags=re.IGNORECASE)
-    for w1 in words_to_remove:
-        for w2 in second_words:
-            pattern = f'{w1}{w2}\s*{year_pattern.pattern}|\s*{w1}{w2}'
-            track_name = re.sub(pattern, '', track_name)
-    track_name = re.sub(year_pattern, '', track_name)
-    return track_name.strip()
 
 
 def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:

@@ -1,5 +1,5 @@
 from setup import music_dir, settings
-from settings import print_space, max_time_outs
+from settings import print_space, max_time_outs, avoid_duplicates
 import pickle
 import os
 import inspect
@@ -311,10 +311,65 @@ def rm_char(text: str) -> str:
     return text.strip()
 
 
-def track_exists(artist_p: str, track_p: str, logger: object = print) -> bool:
+def sanitize_track_name(track_name: str) -> str:
+    """Removes common words and phrases from a given track name and returns a
+    sanitized string in lower case.
+
+    Args:
+        :param track_name: A string representing the original track name.
+        :type track_name: str
+
+    Returns:
+        :return A string representing the sanitized track name.
+        :rtype str
+
+    This function removes the following words and phrases from the track name:
+    remastered, remaster, single, special, radio, "- edit", "(stereo)"
+    And the following if they appear after any of the above words:
+    - version, edit, mix
+    Additionally, any 4-digit year preceeding or following above words is
+    removed from string.
+
+    Example:
+    > sanitize_track_name("Bohemian Rhapsody - Remastered 2011")
+    "Bohemian Rhapsody"
+    """
+    # Define words to remove and second words to remove if they appear after
+    words_to_remove = ['remastered', 'remaster', 'single', 'special', 'radio',
+                       '- edit', 'stereo', 'digital']
+    second_words = [' version', ' edit', ' mix', 'remaster', '']
+    track_name = track_name.lower()
+
+    # Define a pattern for any 4-digit year preceeding or following above words
+    year_pattern = re.compile(r'(19|20)\d{2}\b', flags=re.IGNORECASE)
+
+    # Perform the removal
+    for w1 in words_to_remove:
+        for w2 in second_words:
+            pattern = f'{w1}{w2}\s*{year_pattern.pattern}|\s*{w1}{w2}'
+            track_name = re.sub(pattern, '', track_name)
+    track_name = re.sub(year_pattern, '', track_name)
+
+    # Remove any leading or trailing spaces
+    track_name = track_name.strip()
+    return track_name
+
+
+def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
+    """
+    Check if this song is already available, maybe in a different album
+
+    NB: that unlike the matching process in the main function, here we do
+    not sanitize track name, removing items like (2018 remaster).
+
+    :param artist_p: artist directory path as string
+    :param track_p:  track directory path as string
+    :param logger:   logging object
+    :return:
+    """
     if not avoid_duplicates:
         return False
-    # Check if this song is already available, maybe in a different album
+
     pattern = re.compile(re.escape(track_p).replace(r'\ ', r'[\s_]*'),
                          re.IGNORECASE | re.UNICODE)
     filenames = iglob(os.path.join(music_dir, artist_p, '*', '*.mp3'))
