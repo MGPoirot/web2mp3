@@ -372,7 +372,9 @@ def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
 
     pattern = re.compile(re.escape(track_p).replace(r'\ ', r'[\s_]*'),
                          re.IGNORECASE | re.UNICODE)
-    filenames = iglob(os.path.join(music_dir, artist_p, '*', '*.mp3'))
+    filepaths = iglob(os.path.join(music_dir, artist_p, '*', '*.mp3'))
+    # TODO: check if this solves the issue of not discerning track names from album names
+    filenames = [os.path.basename(f) for f in filepaths]
     existing_tracks = [fn for fn in filenames if pattern.search(fn)]
     if any(existing_tracks):
         logger('FileExistsWarning:')

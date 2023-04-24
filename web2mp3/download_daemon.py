@@ -48,6 +48,7 @@ def download_track(track_uri: str, logger=print):
         # Download cover
         if not 'cover' in mp3_tags:
             logger('KeyError: Cover URL was not set at all')
+            cover_url = None
         else:
             cover_url = mp3_tags.pop('cover')
 
@@ -101,6 +102,7 @@ def download_track(track_uri: str, logger=print):
 
 
 def syscall():
+    # Initiates a daemon process depending on the operating system
     if verbose:
         if os.name == 'posix':
             os.system(f'python download_daemon.py verbose')
@@ -131,14 +133,18 @@ def start_daemons():
 
 
 def uri2path(uri: str) -> str:
+    # Converts a uri to a path,
+    # eg. 'youtube:1U2WcqVZhvw' -> 'youtube-1U2WcqVZhvw'
     return uri.replace(':', '-')
 
 
 def u2t(n, uri: str) -> str:
+    # Formats a daemon dir temp file name
     return daemon_dir.format(f'{n}_{uri2path(uri)}')
 
 
 def get_tasks() -> list:
+    # List tasks that have not been done and that are not running
     song_db = get_song_db()
     uris = song_db[song_db.title.notna()].index  # finish
     uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
@@ -157,28 +163,33 @@ if __name__ == '__main__':
     run_mode = sys.argv[1] if len(sys.argv) > 1 else 'start'
     run_mode = 'verbose' if run_mode == '--mode=client' else run_mode
 
-    # Start daemon
+    # Start daemons
     if input_is('Start', run_mode):
         daemon_started = start_daemons()
         print(f'{daemon_started} Daemons started.')
-    else:  # Run Daemon (special case is process_mode == verbose)
+    else:
+        # List daemons that are not running
         daemon_ns = [i for i in range(max_daemons) if not os.path.isfile(
             daemon_dir.format(i))]
-        if any(daemon_ns):
+        if len(daemon_ns) > 0:
+            # Initiate one daemon
             daemon_n = daemon_ns[0]
             daemon_name = daemon_dir.format(daemon_n)
             daemon_tmp = Logger(daemon_name)
             atexit.register(daemon_tmp.rm)
             tried = []
             while True:
+                # List tasks that are not running
                 uris = get_tasks()
                 uris = [u for u in uris if not u in tried]  # max tries
-                if any(uris):
+                if len(uris) > 0:
+                    # Initiate one task
                     task = uris[0]
                     tried.append(task)
                     task_tmp = Logger(u2t(daemon_n, task))
                     atexit.register(task_tmp.rm)
                     logger_path = log_dir.format(uri2path(task))
+                    # Redirect stdout to log file if not verbose
                     if not input_is('Verbose', run_mode):
                         sys.stdout = open(logger_path.replace('json', 'txt'), "w")
                     log_obj = Logger(logger_path, verbose=True)
