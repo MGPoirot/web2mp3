@@ -390,6 +390,11 @@ def get_path_components(mp3_tags: pd.Series) -> list:
      (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
 
 
+def strip_url(url: str) -> str:
+    # Removes the scheme and domain from a URL
+    return url.split('://')[-1].split('www.')[-1]
+
+
 def timeout_handler(func, *args, **kwargs):
     """
     The Spotify API might return HTTPSTimeOutErrors, not frequently, but it can
