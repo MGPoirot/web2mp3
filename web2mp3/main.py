@@ -2,7 +2,7 @@ from setup import log_dir, spotify_api, settings
 from settings import print_space, default_market, default_tolerance, \
     search_limit, init_daemons, do_overwrite
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
-    get_path_components, track_exists, sanitize_track_name
+    get_path_components, track_exists, sanitize_track_name, strip_url
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
 import pandas as pd
@@ -398,8 +398,8 @@ def init_matching(*urls, default_response=None, platform=None):
             # Create a logger object for this URL
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
-            log_obj(f'{prog(i)}Received new {platform.name} URL'.ljust(
-                print_space), url, verbose=True)
+            log_obj(f'{prog(i)}New {platform.name} URL'.ljust(
+                print_space), strip_url(url), verbose=True)
 
             # Match the URL with its counterpart
             match_audio_with_tags(
