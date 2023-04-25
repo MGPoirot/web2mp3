@@ -165,7 +165,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
                f'{n}) {item_descriptor[:47].ljust(47)} {relative_duration:.0%}')
         # Check if the search result is a match
         if is_clear_match(name, artist, title) and is_duration_match:
-            logger(f'Clear {platform} match'.ljust(print_space),
+            logger(f'Clear {platform} match:'.ljust(print_space),
                    f'{item_descriptor}')
             if platform == 'spotify':
                 matched_obj = get_track_tags(item, logger, do_light=False)
