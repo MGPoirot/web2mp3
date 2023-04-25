@@ -398,7 +398,7 @@ def init_matching(*urls, default_response=None, platform=None):
             # Create a logger object for this URL
             logger_path = log_dir.format(shorten_url(url))
             log_obj = Logger(logger_path)
-            log_obj(f'{prog(i)}New {platform.name} URL'.ljust(
+            log_obj(f'{prog(i)}New {platform.name} URL:'.ljust(
                 print_space), strip_url(url), verbose=True)
 
             # Match the URL with its counterpart
