@@ -153,8 +153,8 @@ if os.environ.get('COOKIE_FILE') is None:
                         f'found.')
     else:
         # Warn the user of the limitations of not setting a COOKIE_FILE
-        print('Warning: No COOKIE_FILE was found. Without COOKIE_FILE age '
-              'restricted download will fail.')
+        print('Warning: No COOKIE_FILE was found. \n'
+              'Without COOKIE_FILE age restricted download will fail.')
         set_in_dot_env("COOKIE_FILE", '')
 
 cookie_file = os.environ.get('COOKIE_FILE')
