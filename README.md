@@ -44,6 +44,10 @@ Alternatively you can call the program straight from the command line. The progr
 
 URLs from YouTube and Spotify are supported. SoundCloud support is coming soon.
 
+
+## Get started in 60 Seconds
+https://user-images.githubusercontent.com/38399483/234430966-bc7fc4d3-1339-4e9a-97df-a430ecfc70ba.mp4
+
 ## Directory structuring
 
 Directory structure follows the recommendation by Plex Media Server:<sup>[1](https://support.plex.tv/articles/205568377-adding-local-artist-and-music-videos/)</sup>
