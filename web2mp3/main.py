@@ -115,8 +115,8 @@ def lookup(query: pd.Series, platform: str, logger=print,
         raise ValueError(f'Uknown platform "{platform}"')
 
     # Query the desired platform
-    prnt_qry = prnt_qry if len(prnt_qry) < 50 else prnt_qry[:47] + '...'
-    logger(f'Searching {platform} for:'.ljust(print_space), f'"{prnt_qry}"')
+    qstr = search_query if len(search_query) < 50 else search_query[:47] + '...'
+    logger(f'Searching {platform} for:'.ljust(print_space), f'"{qstr}"')
     items = []
     try:
         if platform == 'spotify':
