@@ -277,9 +277,9 @@ def match_audio_with_tags(track_url: str, logger: Logger,
     # If there query contains this field it cannot be empty or zero.
     req_fields = ['duration', 'title', 'album', 'artist']
     if query is None:
-        logger(f'Failed: No {input_platform} query for matching.\n')
+        logger(f'Failed: No {input_platform} query for matching.')
     elif any([not bool(query[c]) for c in req_fields if c in query]):
-        logger(f'Skipped: URL refers to empty object.\n')
+        logger(f'Skipped: URL refers to empty object.')
         set_song_db(source_module.url2uri(track_url))
     else:
         match_obj = lookup(query=query,
@@ -291,7 +291,7 @@ def match_audio_with_tags(track_url: str, logger: Logger,
                            search_limit=search_limit)
         if match_obj is False:
             logger(f'Failed: No match between {input_platform} and'
-                   f' {source_module.get_search_platform().name} items.\n')
+                   f' {source_module.get_search_platform().name} items')
         else:
             track_uri, track_tags = source_module.sort_lookup(query, match_obj)
             tags_uri = get_tags_uri(track_tags)
@@ -305,13 +305,13 @@ def match_audio_with_tags(track_url: str, logger: Logger,
             if not do_overwrite:
                 skip = False
             elif track_exists(artist_p, track_p, logger=logger):
-                logger('Skipped: FileExists\n')
+                logger('Skipped: FileExists')
             elif tags_uri in song_db_indices:
-                logger('Skipped: TagsExists\n')
+                logger('Skipped: TagsExists')
             elif track_uri in song_db_indices:
-                logger('Skipped: TrackExists\n')
+                logger('Skipped: TrackExists')
             elif source_uri in song_db_indices:
-                logger('Skipped: SourceExists\n')
+                logger('Skipped: SourceExists')
             else:
                 skip = False
 
@@ -321,8 +321,8 @@ def match_audio_with_tags(track_url: str, logger: Logger,
             set_song_db(track_uri)
             if not skip:
                 set_song_db(track_uri, track_tags)
-                logger('Success: Song DB entries created.\n')
-
+                logger('Success: Download added')
+    logger()
     # Reset and return
     logger.verbose = logger_verbose_default
     return
