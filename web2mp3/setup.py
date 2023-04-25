@@ -134,30 +134,30 @@ if None in env_vals:
 dotenv.load_dotenv()
 
 # Define other paths
-home_dir = os.environ.get("HOME_DIR")
-music_dir = os.environ.get("MUSIC_DIR")
+home_dir = os.environ.get('HOME_DIR')
+music_dir = os.environ.get('MUSIC_DIR')
 daemon_dir = os.path.join(home_dir, '.daemons', 'daemon-{}.tmp')
 log_dir = os.path.join(home_dir, '.logs', '{}.json')
 song_db_file = os.path.join(home_dir, '{}song_db.pkl')
 
 # Check if a COOKIE_FILE is set
-if os.environ.get("COOKIE_FILE") is None:
-    # If it is not set, check if it exists.
+if os.environ.get('COOKIE_FILE') is None:
     cookie_files = glob(os.path.join(home_dir, '**' '*_cookies.txt'))
     if any(cookie_files):
         cookie_file = cookie_files[0]
         # If it exists, write its location to the .env file
-        if not os.path.isfile(cookie_file):
+        if os.path.isfile(cookie_file):
+            set_in_dot_env("COOKIE_FILE", cookie_file)
+        else:
             raise print(f'FileNotFoundWarning: Cookie file "{cookie_file}" not '
                         f'found.')
-        else:
-            set_in_dot_env("COOKIE_FILE", cookie_file)
     else:
         # Warn the user of the limitations of not setting a COOKIE_FILE
         print('Warning: No COOKIE_FILE was found. Without COOKIE_FILE age '
               'restricted download will fail.')
-        os.environ['COOKIE_FILE'] = ''
-cookie_file = os.environ['COOKIE_FILE']
+        set_in_dot_env("COOKIE_FILE", '')
+
+cookie_file = os.environ.get('COOKIE_FILE')
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
