@@ -47,6 +47,7 @@ URLs from YouTube and Spotify are supported. SoundCloud support is coming soon.
 
 ## Get started in 60 Seconds
 https://user-images.githubusercontent.com/38399483/234430966-bc7fc4d3-1339-4e9a-97df-a430ecfc70ba.mp4
+*Displayed Spotify API credentials have since been deleted.*
 
 ## Directory structuring
 
