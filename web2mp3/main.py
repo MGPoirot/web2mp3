@@ -115,7 +115,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
         raise ValueError(f'Uknown platform "{platform}"')
 
     # Query the desired platform
-    qstr = search_query if len(search_query) < 50 else search_query[:47] + '...'
+    qstr = search_query if len(search_query) < 53 else search_query[:50] + '...'
     logger(f'Searching {platform} for:'.ljust(print_space), f'"{qstr}"')
     items = []
     try:
