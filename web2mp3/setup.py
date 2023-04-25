@@ -153,10 +153,11 @@ if os.environ.get("COOKIE_FILE") is None:
         else:
             set_in_dot_env("COOKIE_FILE", cookie_file)
     else:
-        # Give the user a warning of the limitations of not setting a COOKIE_FILE
+        # Warn the user of the limitations of not setting a COOKIE_FILE
         print('Warning: No COOKIE_FILE was found. Without COOKIE_FILE age '
               'restricted download will fail.')
         os.environ['COOKIE_FILE'] = ''
+cookie_file = os.environ['COOKIE_FILE']
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
