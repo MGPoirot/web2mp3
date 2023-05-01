@@ -5,42 +5,44 @@ import os
 import spotipy
 import eyed3
 import re
-from glob import glob
+from pathlib import Path as Path
 eyed3.log.setLevel("ERROR")
 
 
-def get_settings_path() -> str:
-    settings_file = 'settings.txt'
-    try:
-        full_settings_file = os.path.join(os.path.dirname(__file__), settings_file)
-    except NameError:
-        full_settings_file = os.path.join(os.getcwd(), settings_file)
-    return full_settings_file
+class fPath(os.PathLike):
+    """
+    Appends format functionality to pathlib.Path defined objects.
+    NB: returns regular Path objects.
+    """
+    def __init__(self, *args, **kwargs):
+        self._path = Path(*args, **kwargs)
 
+    def __getattr__(self, name):
+        return getattr(self._path, name)
 
-def import_settings():
-    settings_path = get_settings_path()
-    if not os.path.isfile(settings_path):
-        raise FileNotFoundError('Settings file "settings.txt" is missing.')
-    settings_module = SourceFileLoader('settings', settings_path)
-    return settings_module.load_module()
+    def format(self, *args, **kwargs):
+        return Path(str(self._path).format(*args, **kwargs))
+
+    def __fspath__(self):
+        return str(self._path)
 
 
 def set_in_dot_env(key: str, value: str, overwrite=True):
     key = key.upper()
-    if not os.path.isfile('.env'):
+    if not ENV_PATH.is_file():
         # Write first entry
-        with open('.env', 'w') as f:
+        ENV_PATH.parent.mkdir(exist_ok=True)
+        with open(ENV_PATH, 'w') as f:
             f.write(f'{key}={value}\n')
         return
     else:
-        with open('.env', 'r') as f:
+        with open(ENV_PATH, 'r') as f:
             data = f.read()
 
     old_entries = re.findall(f"{key}=.*?\n", data)
     if not any(old_entries) or not overwrite:
         # Append new entry
-        with open('.env', 'a') as f:
+        with open(ENV_PATH, 'a') as f:
             f.write(f'{key}={value}\n')
         return
     elif len(old_entries) > 1:
@@ -50,6 +52,14 @@ def set_in_dot_env(key: str, value: str, overwrite=True):
     data.replace(old_entry, f'{key}={value}\n')
     with open('file.txt', 'w') as file:
         file.write(data)
+
+
+# Load settings
+SETTINGS_PATH = Path(__file__).parents[1] / 'settings.txt'
+if not SETTINGS_PATH.is_file():
+    raise FileNotFoundError(f'Settings file "{SETTINGS_PATH}" is missing.')
+else:
+    settings = SourceFileLoader('settings', str(SETTINGS_PATH)).load_module()
 
 
 def run_setup_wizard():
@@ -66,11 +76,11 @@ def run_setup_wizard():
 
     :return: None
     """
-    web2mp3home = os.getcwd()
-    music_dir_default = os.path.join(web2mp3home, "Music")
+    web2mp3home = Path.cwd()
+    music_dir_default = web2mp3home / "Music"
 
     sfy_validator = lambda ans: all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
-    pth_validator = lambda pth: os.path.isdir(os.path.dirname(pth.encode('unicode_escape')))
+    pth_validator = lambda ans: Path(ans).parent.is_dir()
 
     qs = {
         'HOME_DIR':                ('Web2MP3 home directory',
@@ -103,12 +113,12 @@ def run_setup_wizard():
         while True:
             q_fmt = f'What is your {question}?'
             default = default if not os.environ.get(k) else os.environ.get(k)
-            d_fmt = f'[{repr(default)}]' if default else ''
+            d_fmt = f'[{default}]' if default else ''
             answer = input(f'  {i}. {q_fmt.ljust(settings.print_space)}\n'
                            f'    {d_fmt}\n')
             answer = default if not answer and default else answer
             if validator(answer):
-                set_in_dot_env(key=k, value=repr(answer))
+                set_in_dot_env(key=k, value=answer)
                 break
             else:
                 print(f'     "{answer}" is not a valid {question}')
@@ -116,14 +126,12 @@ def run_setup_wizard():
           'Web2MP3 set up successful.')
 
 
-# Import public settings
-settings = import_settings()
-
 # Check if Web2MP3 has been set up.
-if not dotenv.find_dotenv():
+ENV_PATH = Path('.config', '.env')
+if not dotenv.find_dotenv(ENV_PATH):
     print("No environment file found. Initiating setup wizard.")
     run_setup_wizard()
-dotenv.load_dotenv()
+dotenv.load_dotenv(ENV_PATH)
 
 # Check if setup file is complete, if not, resume setup
 env_keys = 'HOME_DIR', 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', 'SPOTIPY_CLIENT_SECRET'
@@ -131,34 +139,27 @@ env_vals = [os.environ.get(v) for v in env_keys]
 if None in env_vals:
     print("Incomplete environment file found. Resuming setup.")
     run_setup_wizard()
-dotenv.load_dotenv()
+dotenv.load_dotenv(ENV_PATH)
 
-# Define other paths
-home_dir = os.environ.get('HOME_DIR')
-music_dir = os.environ.get('MUSIC_DIR')
-daemon_dir = os.path.join(home_dir, '.daemons', 'daemon-{}.tmp')
-log_dir = os.path.join(home_dir, '.logs', '{}.json')
-song_db_file = os.path.join(home_dir, '{}song_db.pkl')
+# Define paths from config env
+home_dir = Path(os.environ.get('HOME_DIR'))
+music_dir = Path(os.environ.get('MUSIC_DIR'))
+daemon_dir = str(home_dir / '.daemons' / 'daemon-{}.tmp')
+log_dir = str(home_dir / '.logs' / '{}.json')
+song_db_file = str(home_dir / '{}song_db.pkl')
 
 # Check if a COOKIE_FILE is set
 if os.environ.get('COOKIE_FILE') is None:
-    cookie_files = glob(os.path.join(home_dir, '**' '*_cookies.txt'))
-    if any(cookie_files):
-        cookie_file = cookie_files[0]
-        # If it exists, write its location to the .env file
-        if os.path.isfile(cookie_file):
-            set_in_dot_env("COOKIE_FILE", cookie_file)
-        else:
-            raise print(f'FileNotFoundWarning: Cookie file "{cookie_file}" not '
-                        f'found.')
-    else:
+    try:
+        cookie_file = next(home_dir.glob('**/*_cookies.txt'))
+    except StopIteration:
         # Warn the user of the limitations of not setting a COOKIE_FILE
         print('Warning: No COOKIE_FILE was found. \n'
               'Without COOKIE_FILE age restricted download will fail.')
-        set_in_dot_env("COOKIE_FILE", '')
-
-cookie_file = os.environ.get('COOKIE_FILE')
+        cookie_file = ''
+    set_in_dot_env("COOKIE_FILE", cookie_file)
+else:
+    cookie_file = os.environ.get('COOKIE_FILE')
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
-

@@ -1,0 +1,8 @@
+__title__ = 'Web2MP3'
+__description__ = 'CLI to download mp3 tracks with mp3 track information.'
+__url__ = 'https://github.com/MGPoirot/web2mp3'
+__version__ = '1.0.0'
+__author__ = 'MGPoirot'
+__email__ = 'none@gmail.com'
+__license__ = 'MIT License'
+__copyright__ = 'None'

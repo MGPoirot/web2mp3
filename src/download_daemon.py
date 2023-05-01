@@ -1,4 +1,4 @@
-from setup import music_dir, daemon_dir, log_dir, settings
+from initialize import music_dir, daemon_dir, log_dir, settings
 from settings import print_space, max_daemons, verbose, verbose_single, \
     do_overwrite
 from utils import Logger, get_url_platform, get_path_components,\

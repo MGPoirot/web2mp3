@@ -1,4 +1,4 @@
-from setup import music_dir, settings
+from initialize import music_dir, settings
 from settings import print_space, max_time_outs, avoid_duplicates
 import pickle
 import os

@@ -1,4 +1,4 @@
-from setup import cookie_file, settings
+from initialize import cookie_file, settings
 from settings import print_space, preferred_quality
 from utils import hms2s
 from youtubesearchpython import VideosSearch

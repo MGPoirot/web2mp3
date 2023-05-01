@@ -1,4 +1,4 @@
-from setup import spotify_api, settings
+from initialize import spotify_api, settings
 from settings import print_space
 from utils import input_is, flatten, timeout_handler
 import pandas as pd
