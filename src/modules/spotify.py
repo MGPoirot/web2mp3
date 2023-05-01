@@ -1,4 +1,4 @@
-from setup import spotify_api
+from initialize import spotify_api
 from utils import timeout_handler
 from tag_manager import get_track_tags
 import pandas as pd
@@ -15,7 +15,7 @@ album_identifier = '/album/'
 
 def general_handler(url: str, method) -> list:
     """
-    Handles objects containing multipe tracks such as playlists and albums.
+    Handles objects containing multiple tracks such as playlists and albums.
     Returns a list of track URLs
     :param url:     Object url
     :type url:      str
@@ -32,6 +32,9 @@ def general_handler(url: str, method) -> list:
     if 'track' in object_items[0]:
         object_items = [i['track'] for i in object_items]
     object_urls = [uri2url(t['id']) for t in object_items]
+
+    # omit objects that did not have a URL, such as unavailable content
+    object_urls = [u for u in object_urls if u is not None]
     return object_urls
 
 
@@ -73,4 +76,8 @@ def url2uri(url: str, raw=False) -> str:
 
 
 def uri2url(uri: str) -> str:
-    return f"https://open.spotify.com/track/{uri.split(':')[-1]}"
+    try:
+        return f"https://open.spotify.com/track/{uri.split(':')[-1]}"
+    except AttributeError:
+        # NoneType object has no attribute split
+        return None

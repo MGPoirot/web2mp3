@@ -1,4 +1,6 @@
-from setup import log_dir, spotify_api, settings
+import sys
+sys.path.append('src')
+from initialize import log_dir, spotify_api, settings
 from settings import print_space, default_market, default_tolerance, \
     search_limit, init_daemons, do_overwrite
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
@@ -13,8 +15,6 @@ from download_daemon import start_daemons
 from youtubesearchpython import VideosSearch
 from unidecode import unidecode
 from importlib import import_module
-
-
 
 
 def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
