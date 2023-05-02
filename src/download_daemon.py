@@ -1,4 +1,4 @@
-from initialize import music_dir, daemon_dir, log_dir, home_dir
+from initialize import music_dir, daemon_dir, log_dir
 from utils import Logger, get_url_platform, get_path_components,\
     track_exists
 import os

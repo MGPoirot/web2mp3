@@ -56,6 +56,15 @@ def set_in_dot_env(key: str, value: str, overwrite=True):
 
 print_space = 24
 
+
+def sfy_validator(ans: str) -> bool:
+    return all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
+
+
+def pth_validator(ans: str) -> bool:
+    return Path(ans).parent.is_dir()
+
+
 def run_setup_wizard():
     """
     Runs the setup wizard for Web2MP3 and stores user input in a ".env" file.
@@ -72,9 +81,6 @@ def run_setup_wizard():
     """
     web2mp3home = Path.cwd()
     music_dir_default = web2mp3home / "Music"
-
-    sfy_validator = lambda ans: all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
-    pth_validator = lambda ans: Path(ans).parent.is_dir()
 
     qs = {
         'HOME_DIR':                ('Web2MP3 home directory',
@@ -156,4 +162,6 @@ else:
     cookie_file = os.environ.get('COOKIE_FILE')
 
 # Access Spotify API
-spotify_api = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials())
+spotify_api = spotipy.Spotify(
+    client_credentials_manager=SpotifyClientCredentials()
+)
