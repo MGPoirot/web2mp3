@@ -1,5 +1,4 @@
-from initialize import cookie_file, settings
-from settings import print_space, preferred_quality
+from initialize import cookie_file
 from utils import hms2s
 from youtubesearchpython import VideosSearch
 import os
@@ -40,7 +39,7 @@ def uri2url(uri: str) -> str:
     return f'https://www.youtube.com/watch?v={uri.split(":")[-1]}'
 
 
-def get_description(track_url: str, logger=print, *kwargs) -> str:
+def get_description(track_url: str, logger=print, market=None) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
 
@@ -78,7 +77,8 @@ def get_description(track_url: str, logger=print, *kwargs) -> str:
     return description
 
 
-def audio_download(youtube_url: str, audio_fname: str, logger=print):
+def audio_download(youtube_url: str, audio_fname: str, quality:int,
+                   logger=print):
     # ydl does not need the extension
     fname, codec = audio_fname.split(os.extsep)
 
@@ -88,7 +88,7 @@ def audio_download(youtube_url: str, audio_fname: str, logger=print):
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': codec,
-            'preferredquality': preferred_quality,
+            'preferredquality': quality,
         }],
         'outtmpl': fname,
         'cookiefile': cookie_file,
@@ -103,3 +103,13 @@ def audio_download(youtube_url: str, audio_fname: str, logger=print):
         if not cookie_file:
             logger('Warning: No COOKIE_FILE was found. Without COOKIE_FILE '
                    'file restricted download will fail.')
+
+
+def search(search_query, **kwargs):
+    search_limit = kwargs['search_limit']
+    results = VideosSearch(
+        query=search_query,
+        limit=search_limit
+    ).result()
+    items = results['result']
+    return items

@@ -1,5 +1,4 @@
-from initialize import music_dir, settings
-from settings import print_space, max_time_outs, avoid_duplicates
+from initialize import music_dir
 import pickle
 import os
 import inspect
@@ -12,6 +11,7 @@ import re
 from glob import iglob
 eyed3.log.setLevel("ERROR")
 from time import sleep
+from importlib import import_module
 
 
 def hms2s(hhmmss: str) -> int:
@@ -45,8 +45,8 @@ def get_url_platform(track_url: str, logger: object = print):
         :type track_url: str
 
     Returns:
-        :return: The extracted domain name string.
-        :rtype: str
+        :return: The extracted domain name module.
+        :rtype: module
 
     Raises:
         :raise KeyError: If the URL does not contain any known domain patterns.
@@ -70,7 +70,12 @@ def get_url_platform(track_url: str, logger: object = print):
                 'soundcloud:':      'soundcloud',}
     for pattern, domain in patterns.items():
         if pattern in track_url:
-            return domain
+            # Identify the platform where the URL is from
+            try:
+                module = import_module(f'modules.{domain}')
+            except ModuleNotFoundError:
+                return
+            return module
     logger(f'No pattern found in "{track_url}".'
            f'Known patterns: {"; ".join(patterns)}')
     return None
@@ -379,7 +384,9 @@ def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
     if any(existing_tracks):
         logger('FileExistsWarning:')
         for i, et in enumerate(existing_tracks, 1):
-            logger(f'   {i})'.rjust(print_space), f'{et[len(music_dir):]}')
+            breakpoint()
+            logger(f'   {i})'.rjust(print_space),
+                   f'{et[len(str(music_dir.absolute())):]}')
     return any(existing_tracks)
 
 

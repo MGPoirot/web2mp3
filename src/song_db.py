@@ -3,9 +3,37 @@ import pandas as pd
 import os
 from time import time
 import shutil
+from pandas import Int64Dtype as PdInt
+from pandas import BooleanDtype as PdBool
+from pandas import StringDtype as PdStr
+from pandas import Float32Dtype as PdFlt
 
 
-def get_song_db() -> dict:
+song_db_template = {
+    'title': PdStr(),
+    'album': PdStr(),
+    'album_artist': PdStr(),
+    'duration': PdFlt(),
+    'bpm': PdInt(),
+    'artist': PdStr(),
+    'internet_radio_url': PdStr(),
+    'cover': PdStr(),
+    'disc_num': object,
+    'genre': PdStr(),
+    'release_date': PdStr(),
+    'recording_date': PdStr(),
+    'tagging_date': PdStr(),
+    'track_num': object,
+    'kwarg_print_space': PdInt(),
+    'kwarg_max_daemons': PdInt(),
+    'kwarg_verbose': PdBool(),
+    'kwarg_verbose_single': PdBool(),
+    'kwarg_do_overwrite': PdBool(),
+    'kwarg_quality': PdInt(),
+}
+
+
+def get_song_db() -> pd.DataFrame:
     """
     Load the Song Data Base (song_db) file, or
     create one if it does not exist.
@@ -17,12 +45,8 @@ def get_song_db() -> dict:
     tmp_path = song_db_file.format('.')
 
     if not os.path.isfile(sdb_path):
-        pd.DataFrame(
-            columns=['title', 'album', 'album_artist', 'duration', 'bpm',
-                     'artist', 'internet_radio_url', 'cover', 'disc_num',
-                     'genre', 'release_date', 'recording_date', 'tagging_date',
-                     'track_num']
-        ).to_pickle(sdb_path)
+        sdb = pd.DataFrame(columns=song_db_template).astype(song_db_template)
+        sdb.to_pickle(sdb_path)
     try:
         # Test if the file can be loaded
         sdb = pd.read_pickle(sdb_path)
@@ -42,7 +66,8 @@ def get_song_db() -> dict:
 def set_song_db(uri: str, value=None):
     """ Set a value to a key (=short URL) in the song database """
     song_db = get_song_db()
-    song_db.loc[uri] = pd.Series(value, dtype='O')
+    dtype = {'dtype': 'O'} if value is None else {}
+    song_db.loc[uri] = pd.Series(value, **dtype)
     song_db.to_pickle(song_db_file.format(''))
     return
 

@@ -54,13 +54,7 @@ def set_in_dot_env(key: str, value: str, overwrite=True):
         file.write(data)
 
 
-# Load settings
-SETTINGS_PATH = Path(__file__).parents[1] / 'settings.txt'
-if not SETTINGS_PATH.is_file():
-    raise FileNotFoundError(f'Settings file "{SETTINGS_PATH}" is missing.')
-else:
-    settings = SourceFileLoader('settings', str(SETTINGS_PATH)).load_module()
-
+print_space = 24
 
 def run_setup_wizard():
     """
@@ -114,7 +108,7 @@ def run_setup_wizard():
             q_fmt = f'What is your {question}?'
             default = default if not os.environ.get(k) else os.environ.get(k)
             d_fmt = f'[{default}]' if default else ''
-            answer = input(f'  {i}. {q_fmt.ljust(settings.print_space)}\n'
+            answer = input(f'  {i}. {q_fmt.ljust(print_space)}\n'
                            f'    {d_fmt}\n')
             answer = default if not answer and default else answer
             if validator(answer):
