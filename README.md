@@ -1,4 +1,4 @@
-<img align="right" width="200" height="200" src="logo.svg"></img>
+<img align="right" width="200" height="200" src="res/logo.svg"></img>
 # Web2mp3 - Music Download CLI
 A scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
 ## How to use
