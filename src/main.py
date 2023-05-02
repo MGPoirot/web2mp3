@@ -1,20 +1,17 @@
 import sys
 sys.path.append('src')
-from initialize import log_dir, spotify_api, settings
-from settings import print_space, default_market, default_tolerance, \
-    search_limit, init_daemons, do_overwrite
+from initialize import log_dir
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
-    get_path_components, track_exists, sanitize_track_name, strip_url
+    get_path_components, track_exists, sanitize_track_name, strip_url, flatten
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
 import pandas as pd
 import re
-from time import sleep
 from song_db import set_song_db, get_song_db
 from download_daemon import start_daemons
-from youtubesearchpython import VideosSearch
 from unidecode import unidecode
-from importlib import import_module
+import click
+from click import Choice
 
 
 def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
@@ -46,9 +43,8 @@ def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
         and rip(artist_name) in rip(title)
 
 
-def lookup(query: pd.Series, platform: str, logger=print,
-           duration_tolerance=0.05, market='NL', default_response=None,
-           search_limit=5) -> pd.Series:
+def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
+        pd.Series:
     """
     Search for a track on a specified platform and return the best match.
 
@@ -60,7 +56,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
 
     :param platform: The platform to search on. Currently supported options
         are 'spotify' and 'youtube'.
-    :type platform: str
+    :type platform: module
 
     :param logger: A logging object for printing information and errors.
 
@@ -91,20 +87,20 @@ def lookup(query: pd.Series, platform: str, logger=print,
         tags. If the search is cancelled by the user the function returns False.
     :rtype: pandas.Series or str or bool
     """
+    ps = kwargs['print_space']
+    default_response = kwargs['response']
+    duration_tolerance = kwargs['tolerance']
+    market = kwargs['market']
     matched_obj = None  # This is what we will return
 
     # Sanitize default response
     accept_origin = 'the user' if default_response is None else 'default'
-    if isinstance(default_response, str):
-        if default_response.isdigit():
-            # If we always want option X, we do not have to look any further
-            search_limit = int(default_response)
 
     # Define what track information we have already received
-    if platform == 'spotify':
+    if platform.name == 'spotify':
         title = query.video_title
         search_query = title
-    elif platform == 'youtube':
+    elif platform.name == 'youtube':
         name = query.title
         artist = query.artist
         if hasattr(query, 'video_title'):  # For manual retries
@@ -112,43 +108,23 @@ def lookup(query: pd.Series, platform: str, logger=print,
         else:
             search_query = f'{name} - {artist}'
     else:
-        raise ValueError(f'Uknown platform "{platform}"')
+        raise ValueError(f'Unknown platform "{platform}"')
 
     # Query the desired platform
     qstr = search_query if len(search_query) < 53 else search_query[:50] + '...'
-    logger(f'Searching {platform} for:'.ljust(print_space), f'"{qstr}"')
-    items = []
-    try:
-        if platform == 'spotify':
-            results = spotify_api.search(
-                q=search_query,
-                limit=search_limit,
-                market=market,
-                type='track'
-            )
-            items = results['tracks']['items']
-        elif platform == 'youtube':
-            results = VideosSearch(
-                query=search_query,
-                limit=search_limit
-            ).result()
-            items = results['result']
-    except KeyboardInterrupt:
-        matched_obj = False
-    except TimeoutError:
-        logger('spotify encountered a Timeout error. Try again in 2 seconds.')
-        sleep(2)
+    logger(f'Searching {platform.name} for:'.ljust(ps), f'"{qstr}"')
+    items = platform.search(search_query, **kwargs)
 
     # Check if one of our search results matches our query
     for n, item in enumerate(items, 1):
         # Extract information from our query results
-        if platform == 'spotify':
+        if platform.name == 'spotify':
             item_duration = item['duration_ms'] / 1000
-            item_tags = get_track_tags(item, logger, do_light=True)
+            item_tags = get_track_tags(item, do_light=True)
             name = item_tags.title
             artist = item_tags.album_artist
             item_descriptor = f'{name} - {artist}'
-        elif platform == 'youtube':
+        elif platform.name == 'youtube':
             item_duration = hms2s(item['duration'])
             item_descriptor = item['title']
             title = item['title']
@@ -161,14 +137,14 @@ def lookup(query: pd.Series, platform: str, logger=print,
         is_duration_match = abs(relative_duration - 1) < duration_tolerance
 
         # Print a synopsis of our search result
-        logger(''.rjust(print_space),
+        logger(''.rjust(ps),
                f'{n}) {item_descriptor[:47].ljust(47)} {relative_duration:.0%}')
         # Check if the search result is a match
         if is_clear_match(name, artist, title) and is_duration_match:
-            logger(f'Clear {platform} match:'.ljust(print_space),
+            logger(f'Clear {platform.name} match:'.ljust(ps),
                    f'{item_descriptor}')
-            if platform == 'spotify':
-                matched_obj = get_track_tags(item, logger, do_light=False)
+            if platform.name == 'spotify':
+                matched_obj = get_track_tags(item, do_light=False)
             else:
                 matched_obj = pd.Series({'track_url': item['link'],
                                          'video_title': item_descriptor,
@@ -177,7 +153,7 @@ def lookup(query: pd.Series, platform: str, logger=print,
 
     # Without clear match provide the user with options:
     if matched_obj is None:
-        logger(f'No clear {platform} match. Select:')
+        logger(f'No clear {platform.name} match. Select:')
         if default_response is None:
             item_options = '/'.join(
                 [str(i + 1) if i else f'[{i + 1}]' for i in range(len(items))]
@@ -197,15 +173,11 @@ def lookup(query: pd.Series, platform: str, logger=print,
             else:
                 selected_item = items[idx]
 
-                if platform == 'spotify':
-                    matched_obj = get_track_tags(
-                        track_item=selected_item,
-                        logger=logger,
-                        do_light=False
-                    )
+                if platform.name == 'spotify':
+                    matched_obj = get_track_tags(track_item=selected_item)
                     item_descriptor = f'{matched_obj.title} - ' \
                                       f'{matched_obj.album_artist}'
-                elif platform == 'youtube':
+                elif platform.name == 'youtube':
                     item = selected_item
                     item_descriptor = item['title']
                     item_duration = hms2s(item['duration'])
@@ -213,29 +185,29 @@ def lookup(query: pd.Series, platform: str, logger=print,
                                              'video_title': item_descriptor,
                                              'duration': item_duration})
                 logger(f'Match accepted by {accept_origin}: '
-                       f''.ljust(print_space), item_descriptor)
+                       f''.ljust(ps), item_descriptor)
 
         elif input_is('Retry', proceed):
-            logger(f'Provide new info for {platform} query: ')
+            logger(f'Provide new info for {platform.name} query: ')
             search_query = input('>>> Track name and artist? '
-                                 ''.ljust(print_space))
+                                 ''.ljust(ps))
             query.video_title = search_query
 
         elif input_is('Manual', proceed):
-            if platform == 'spotify':
+            if platform.name == 'spotify':
                 logger('Provide manual track info: ')
                 matched_obj = manual_track_tags(market=market)
-            elif platform == 'youtube':
+            elif platform.name == 'youtube':
                 matched_obj = input('>>> Provide YouTube URL: '
-                                    ''.ljust(print_space)).split('&')[0]
+                                    ''.ljust(ps)).split('&')[0]
 
         elif input_is('Abort', proceed):
             matched_obj = False
 
         elif input_is('Change market', proceed):
-            market = input('>>> Market code?'.ljust(print_space)) or None
-            logger('Market changed to:'.ljust(print_space))
-
+            market = input('>>> Market code?'.ljust(ps)) or None
+            logger('Market changed to:'.ljust(ps))
+            kwargs['market'] = market
         else:
             logger(f'Invalid input "{proceed}"')
 
@@ -245,194 +217,218 @@ def lookup(query: pd.Series, platform: str, logger=print,
             query=query,
             platform=platform,
             logger=logger,
-            duration_tolerance=duration_tolerance,
-            market=market,
-            default_response=default_response,
-            search_limit=search_limit
+            **kwargs,
         )
     return matched_obj
 
 
-def match_audio_with_tags(track_url: str, logger: Logger,
-                          duration_tolerance=0.05, market='NL',
-                          default_response=None, search_limit=5):
+def match_audio_with_tags(track_url: str, **kwargs):
     """
     This function matches a given URL, and writes what it found to the song
     database, after which it calls this function again, but as a background
     process, and finishes.
     """
+    # Get the arguments
+    ps = kwargs['print_space']
+    market = kwargs['market']
+    do_overwrite = kwargs['do_overwrite']
 
-    logger_verbose_default = logger.verbose
-    logger.verbose = True
+    # Create a logger object for this URL
+    logger_path = log_dir.format(shorten_url(track_url))
+    logger = Logger(logger_path, verbose=True)
 
-    # Get the information we need to perform the matching
-    input_platform = get_url_platform(track_url)
-    source_module = import_module(
-        f'modules.{input_platform}') if input_platform else None
-    search_module = source_module.get_search_platform()
-
-    # Perform matching and check results
-    query = source_module.get_description(track_url, logger,
-                                          market) if source_module else None
-    # If there query contains this field it cannot be empty or zero.
-    req_fields = ['duration', 'title', 'album', 'artist']
-    if query is None:
-        logger(f'Failed: No {input_platform} query for matching.')
-    elif any([not bool(query[c]) for c in req_fields if c in query]):
-        logger(f'Skipped: URL refers to empty object.')
-        set_song_db(source_module.url2uri(track_url))
+    # Get the source platform module and the platform we need to match it with
+    source = get_url_platform(track_url)
+    if source is None:  # matching failed
+        return
     else:
-        match_obj = lookup(query=query,
-                           platform=search_module.name,
-                           logger=logger,
-                           duration_tolerance=duration_tolerance,
-                           market=market,
-                           default_response=default_response,
-                           search_limit=search_limit)
-        if match_obj is False:
-            logger(f'Failed: No match between {input_platform} and'
-                   f' {source_module.get_search_platform().name} items')
-        else:
-            track_uri, track_tags = source_module.sort_lookup(query, match_obj)
-            tags_uri = get_tags_uri(track_tags)
-            source_uri = source_module.url2uri(track_url)  # 1 id may >1  urls
+        logger(f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
+    search = source.get_search_platform()
 
-            #  Check if the track is already in the database
-            song_db_indices = get_song_db().index
-            artist_p, _, track_p = get_path_components(track_tags)
+    # Skip in case the URL is already in the database
+    if source.url2uri(track_url) in get_song_db().index and not do_overwrite:
+        print(f'Skipped: {source.name} URI exists in Song Data Base.\n')
+        return
 
-            skip = True
-            if not do_overwrite:
-                skip = False
-            elif track_exists(artist_p, track_p, logger=logger):
-                logger('Skipped: FileExists')
-            elif tags_uri in song_db_indices:
-                logger('Skipped: TagsExists')
-            elif track_uri in song_db_indices:
-                logger('Skipped: TrackExists')
-            elif source_uri in song_db_indices:
-                logger('Skipped: SourceExists')
-            else:
-                skip = False
+    # Get a description of the object to use for matching
+    query = source.get_description(track_url, logger, market)
+    if query is None:  # Failed to retrieve query
+        logger(f'Failed: No {source.name} query for matching.\n')
+        return
 
-            # Set song database entries
-            set_song_db(tags_uri)
-            set_song_db(source_uri)
-            set_song_db(track_uri)
-            if not skip:
-                set_song_db(track_uri, track_tags)
-                logger('Success: Download added')
-    logger()
-    # Reset and return
-    logger.verbose = logger_verbose_default
+    # If the query contains this field it cannot be empty or zero.
+    req_fields = ['duration', 'title', 'album', 'artist']
+    if any([not bool(query[c]) for c in req_fields if c in query]):
+        logger(f'Skipped: URL refers to empty object.')
+        set_song_db(source.url2uri(track_url))
+        return
+
+    # Match the object
+    match_obj = lookup(query=query,
+                       platform=search,
+                       logger=logger,
+                       **kwargs)
+
+    if match_obj is False:
+        logger(f'Failed: No match between {source.name} and'
+               f' {source.get_search_platform().name} items\n')
+        return
+
+    track_uri, track_tags = source.sort_lookup(query, match_obj)
+    tags_uri = get_tags_uri(track_tags)
+    source_uri = source.url2uri(track_url)  # 1 id may >1  urls
+
+    #  Check if the found tracks is already in the database
+    song_db_indices = get_song_db().index
+    artist_p, _, track_p = get_path_components(track_tags)
+
+    skip = True
+    if not do_overwrite:
+        skip = False
+    elif track_exists(artist_p, track_p, logger=logger):
+        logger('Skipped: FileExists')
+    elif tags_uri in song_db_indices:
+        logger('Skipped: TagsExists')
+    elif track_uri in song_db_indices:
+        logger('Skipped: TrackExists')
+    elif source_uri in song_db_indices:
+        logger('Skipped: SourceExists')
+    else:
+        skip = False
+
+    # Set song database entries
+    set_song_db(tags_uri)
+    set_song_db(source_uri)
+    set_song_db(track_uri)
+    if not skip:
+        keys = 'print_space', 'max_daemons', 'verbose', 'verbose_continuous', \
+            'do_overwrite', 'quality'
+
+        # TODO: REMOVE THIS AS SOON AS OLD SONG DB HAS BEEN UPDATED
+        foo = get_song_db()
+        if not any(i for i in foo.columns if 'kwarg' in i):
+            import numpy as np
+            from initialize import song_db_file
+            kkeys = ['kwarg_' + k for k in keys]
+            for k in kkeys:
+                if '_space' in k or 'max_d' in k or '_quali' in k:
+                    dtype = {'dtype': pd.Int64Dtype()}
+                elif 'verbose' in k or 'do_overwrite' in k:
+                    dtype = {'dtype': pd.BooleanDtype()}
+                foo.insert(loc=len(foo.columns), column=k,
+                           value=pd.array(data=[np.nan] * len(foo), **dtype))
+            foo.to_pickle(song_db_file.format(''))
+            # TODO: SEE ABOVE
+
+        kwg_df = pd.Series({f'kwarg_{k}': kwargs[k] for k in keys})
+        track_tags = pd.concat([track_tags, kwg_df])
+        set_song_db(track_uri, track_tags)
+        logger('Success: Download added\n')
     return
 
 
-def init_matching(*urls, default_response=None, platform=None):
-    # Get the number of URLs to match
-    n_urls = str(len(urls))
+def unpack_url(url: str) -> list:
+    # Skip empty URL
+    if not url:
+        return []
 
-    # Define a shorthand for printing progress
-    def prog(n):
-        return f'{str(n + 1).rjust(len(n_urls))}/{n_urls} '
+    # Anything after '&' is not of interest
+    url = url.split('&')[0]
 
-    for i, url in enumerate(urls):
-        # Sanitize URL
-        url = url.split('&')[0]
+    # Identify the platform where the URL is from
+    platform = get_url_platform(url)
+    if platform is None:
+        print('Failed to unpack URL')
+        return []
 
-        # Skip empty URL
-        if not url:
-            continue
+    # Check if the URL is a reference to a batch of tracks
+    if platform.playlist_identifier in url:
+        urls = platform.playlist_handler(url)
+    elif platform.album_identifier in url:
+        urls = platform.album_handler(url)
+    else:
+        urls = [url]
+    return urls
 
-        # Identify the platform where the URL is from
-        if platform is None:
-            platform_name = get_url_platform(url)
-            if platform_name is None:
-                print('Failed to identify the platform.\n ')
-                continue
-            else:
-                platform = import_module(f'modules.{platform_name}')
 
-        # Check if the URL is a reference to a batch of tracks
-        if platform.playlist_identifier in url or\
-           platform.album_identifier in url:
-            if platform.playlist_identifier in url:
-                # Get playlist items
-                urls = platform.playlist_handler(url)
-                found_obj = 'playlist'
-            elif platform.album_identifier in url:
-                urls = platform.album_handler(url)
-                found_obj = 'album'
-            else:
-                print('Failed to assign an appropriate batch handler.')
-                continue
+def main(**kwargs):
+    # Get arguments
+    ps = kwargs['print_space']
+    urls = kwargs['urls']
+    init_daemons = kwargs['init_daemons']
+    headless = kwargs['headless']
+    max_daemons = kwargs['max_daemons']
+    verbose = kwargs['verbose']
 
-            # Make sure we do not start some big batch job without checking
-            # if the user is ok with it.
-            print(f'>>> Received {found_obj} with {len(urls)} items. ')
-            default_response = input(
-                '>>> Set default response procedure?: [None]/1/Abort  '
-                ''.ljust(print_space)) or None
-            if default_response is None:
-                pass
-            elif input_is('None', default_response):
-                default_response = None
-            elif not input_is('1', default_response) and not input_is(
-                    'Abort', default_response):
-                print('Invalid input:'.ljust(print_space),
-                      f'"{default_response}"')
-                default_response = None
-            init_matching(
-                *urls,
-                default_response=default_response,
-                platform=platform
-            )
-        else:
-            # Skip in case the URL is already in the database
-            if platform.url2uri(url) in get_song_db().index:
-                print(f'{prog(i)}Skipped: {platform.name} URI '
-                      f'exists in Song Data '
-                      'Base.\n')
-                continue
+    # Unpack URLs that contain playlists or albums
+    urls = flatten([unpack_url(u) for u in urls])
 
-            # Create a logger object for this URL
-            logger_path = log_dir.format(shorten_url(url))
-            log_obj = Logger(logger_path)
-            log_obj(f'{prog(i)}New {platform.name} URL:'.ljust(
-                print_space), strip_url(url), verbose=True)
-
-            # Match the URL with its counterpart
-            match_audio_with_tags(
-                track_url=url,
-                logger=log_obj,
-                duration_tolerance=default_tolerance,
-                market=default_market,
-                default_response=default_response,
-                search_limit=search_limit
-            )
-
+    # Process URLs that were already provided
+    for url in urls:
+        match_audio_with_tags(url, **kwargs)
         # Start the daemons during the matching of further items
         if input_is('During', init_daemons):
-            start_daemons()
+            n_started = start_daemons(max_daemons, verbose)
+            if n_started and not verbose:
+                print(f'{n_started} DAEMONs started')
+    # Start the daemons after the matching of all items
+    if input_is('After', init_daemons):
+        n_started = start_daemons(max_daemons, verbose)
+        if n_started and not verbose:
+            print(f'{n_started} DAEMONs started')
 
-
-if __name__ == '__main__':
-    if len(sys.argv) == 1:  # No URL provided, run in Python mode
+    # Ask for more URLs with previously provided arguments
+    if not headless:
         while True:
-            input_url = input('>>> URL or [Abort]?'.ljust(print_space))
+            input_url = input('>>> URL or [Abort]?'.ljust(ps))
             if not input_url or input_is('Abort', input_url):
                 print('Bye Bye!')
                 sys.exit()
             else:
-                init_matching(*input_url.split(' '))
-    else:
-        # Send the URL straight to the matching function
-        input_urls = sys.argv[1:]
-        init_matching(*input_urls)
+                input_urls = input_url.split(' ')
+                kwargs['urls'] = input_urls
+                main(**kwargs)
 
-        # Start the daemons during the matching of all items
-        if input_is('After', init_daemons):
-            start_daemons()
+
+@click.command("cli", context_settings={'show_default': True})
+@click.version_option()
+@click.argument("urls", nargs=-1)
+@click.option("-r", "--response", default=None,
+              type=Choice(['1', 'Abort'], case_sensitive=False),
+              help="Response when no match.")
+@click.option("-x", "--max_daemons", default=4,
+              help="Maximum number of DAEMONs.")
+@click.option("-h", "--headless", is_flag=True, default=False,
+              help="To exit when arguments have been processed.")
+@click.option("-i", "--init_daemons", default="during",
+              type=Choice(['During', 'After', 'Not'], case_sensitive=False),
+              help="When to initiate DAEMONs.")
+@click.option("-v", "--verbose", is_flag=True, default=False,
+              help="To download in foreground.")
+@click.option("-c", "--verbose_continuous", is_flag=True, default=False,
+              help="When verbose, to continue after 1 item.")
+@click.option("-t", "--tolerance", default=0.10,
+              help="Duration difference threshold.")
+@click.option("-m", "--market", default="NL",
+              help="Spotify API market.")
+@click.option("-l", "--search_limit", default=5,
+              help="Tracks to check for match.")
+@click.option("-d", "--avoid_duplicates", is_flag=True, default=True,
+              help="To skip if file exists.")
+@click.option("-o", "--do_overwrite", is_flag=True, default=False,
+              help="To proceed if URL in DB.")
+@click.option("-p", "--print_space", default=24,
+              help="Whitespaces used when logging.")
+@click.option("-w", "--max_time_outs", default=10,
+              help="Attempts when TimeOut.")
+@click.option("-q", "--quality", default=320,
+              help="Audio quality in kB/s")
+def click_processor(**kwargs):
+    main(**kwargs)
+
+
+if __name__ == '__main__':
+    click_processor()
 
 # os.system(f'sudo su plex -s /bin/bash')
 # We will want to use the API for scanning:

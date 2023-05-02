@@ -1,8 +1,6 @@
-from initialize import music_dir, daemon_dir, log_dir, settings
-from settings import print_space, max_daemons, verbose, verbose_single, \
-    do_overwrite
+from initialize import music_dir, daemon_dir, log_dir, home_dir
 from utils import Logger, get_url_platform, get_path_components,\
-    track_exists, input_is
+    track_exists
 import os
 from glob import glob
 from song_db import get_song_db, set_song_db
@@ -10,7 +8,7 @@ from tag_manager import download_cover_img, set_file_tags
 import atexit
 import sys
 from multiprocessing import Process
-from importlib import import_module
+import click
 
 
 def download_track(track_uri: str, logger=print):
@@ -24,7 +22,17 @@ def download_track(track_uri: str, logger=print):
     logger('Started download_track')
 
     # Retrieve and extract song properties from the song database
-    mp3_tags = get_song_db().loc[track_uri]
+    series = get_song_db().loc[track_uri]
+
+    # Unpack kwargs from track tags
+    idx = series.index.str.contains('kwarg')
+    kwargs = series[idx]
+    mp3_tags = series[~idx]
+    kwargs = kwargs.rename({k: k.replace('kwarg_', '') for k in kwargs.index})
+
+    ps = kwargs.print_space
+    do_overwrite = kwargs.do_overwrite
+    preferred_quality = kwargs.quality
     artist_p, album_p, track_p = get_path_components(mp3_tags)
 
     file_exists = False
@@ -35,15 +43,15 @@ def download_track(track_uri: str, logger=print):
         # Define paths
         album_dir = os.path.join(music_dir, artist_p, album_p)
         tr_prefix = None if mp3_tags.track_num is None else\
-            f'{mp3_tags.track_num} - '
+            f'{mp3_tags.track_num[0]} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
         os.makedirs(album_dir, mode=0o777, exist_ok=True)
 
         # Log storage locations
-        logger('Album dir'.ljust(print_space), f'"{album_dir}"')
-        logger('Cover filename    '.ljust(print_space), f'"{cov_fname}"')
-        logger('MP3 Audio filename'.ljust(print_space), f'"{mp3_fname}"')
+        logger('Album dir'.ljust(ps), f'"{album_dir}"')
+        logger('Cover filename    '.ljust(ps), f'"{cov_fname}"')
+        logger('MP3 Audio filename'.ljust(ps), f'"{mp3_fname}"')
 
         # Download cover
         if not 'cover' in mp3_tags:
@@ -58,22 +66,22 @@ def download_track(track_uri: str, logger=print):
             logger('FileExistsWarning:', cov_fname)
         else:
             if do_overwrite:
-                logger('File Overwritten:'.ljust(print_space), f'"{cov_fname}"')
+                logger('File Overwritten:'.ljust(ps), f'"{cov_fname}"')
                 os.remove(cov_fname)
             download_cover_img(cov_fname, cover_url, logger=logger)
 
         # Specify downloading method
-        domain = get_url_platform(track_uri)
-        download_method = import_module(f'modules.{domain}')
+        download_method = get_url_platform(track_uri)
         track_url = download_method.uri2url(track_uri)
 
         # Check if file already exists and if it should be overwritten
         if do_overwrite and os.path.isfile(mp3_fname):
-            logger('File Overwritten:'.ljust(print_space), f'"{mp3_fname}"')
+            logger('File Overwritten:'.ljust(ps), f'"{mp3_fname}"')
             os.remove(mp3_fname)
 
         # Download audio
-        download_method.audio_download(track_url, mp3_fname, logger=logger)
+        download_method.audio_download(track_url, mp3_fname, quality,
+                                       logger=logger)
 
         # Set file tags
         if os.path.isfile(mp3_fname):
@@ -101,23 +109,24 @@ def download_track(track_uri: str, logger=print):
     logger(f'download_track {conclusion}')
 
 
-def syscall():
+def syscall(verbose=False):
     # Initiates a daemon process depending on the operating system
+    __file__
     if verbose:
         if os.name == 'posix':
-            os.system(f'python download_daemon.py verbose')
+            os.system(f'python {__file__} --verbose')
         else:
-            os.system(f'python download_daemon.py verbose')
+            os.system(f'python {__file__} --verbose')
     else:
         if os.name == 'posix':
-            os.system(f'python download_daemon.py background &')
+            os.system(f'python {__file__} &')
         else:
-            os.system(f'pythonw download_daemon.py background')
+            os.system(f'pythonw {__file__}')
 
 
-def start_daemons():
+def start_daemons(max_daemons=4, verbose=False):
     if verbose:
-        syscall()
+        syscall(verbose)
         return 1
 
     n_started = 0
@@ -151,52 +160,61 @@ def get_tasks() -> list:
     return uris
 
 
-if __name__ == '__main__':
-    """
-    Behaviour:
-    - Start [default]:  starts daemons until max_daemons has been reached
-    - Verbose:          starts one daemon, runs one task and prints logs
-    - anything else:    starts one daemon and runs it in the background
-    """
+@click.command()
+@click.version_option()
+@click.option("-x", "--max_daemons", default=-1,
+              help="Number of DAEMONs to spawn as integer")
+@click.option("-v", "--verbose", is_flag=True, default=False,
+              help="Whether to download in foreground as bool")
+@click.option("-s", "--verbose_continuous", is_flag=True, default=False,
+              help="When verbose, whether to continue after 1 item")
+def daemon_job(max_daemons=-1, verbose=False, verbose_continuous=False):
+    # List daemons that are not running
+    daemon_ns = [i for i in range(max_daemons) if
+                 not os.path.isfile(daemon_dir.format(i))]
 
-    # Accept input
-    run_mode = sys.argv[1] if len(sys.argv) > 1 else 'start'
-    run_mode = 'verbose' if run_mode == '--mode=client' else run_mode
-
-    # Start daemons
-    if input_is('Start', run_mode):
-        daemon_started = start_daemons()
-        print(f'{daemon_started} Daemons started.')
+    if len(daemon_ns):
+        daemon_n = daemon_ns[0]  # Get the first DAEMON that is not running
     else:
-        # List daemons that are not running
-        daemon_ns = [i for i in range(max_daemons) if not os.path.isfile(
-            daemon_dir.format(i))]
-        if len(daemon_ns) > 0:
-            # Initiate one daemon
-            daemon_n = daemon_ns[0]
-            daemon_name = daemon_dir.format(daemon_n)
-            daemon_tmp = Logger(daemon_name)
-            atexit.register(daemon_tmp.rm)
-            tried = []
-            while True:
-                # List tasks that are not running
-                uris = get_tasks()
-                uris = [u for u in uris if not u in tried]  # max tries
-                if len(uris) > 0:
-                    # Initiate one task
-                    task = uris[0]
-                    tried.append(task)
-                    task_tmp = Logger(u2t(daemon_n, task))
-                    atexit.register(task_tmp.rm)
-                    logger_path = log_dir.format(uri2path(task))
-                    # Redirect stdout to log file if not verbose
-                    if not input_is('Verbose', run_mode):
-                        sys.stdout = open(logger_path.replace('json', 'txt'), "w")
-                    log_obj = Logger(logger_path, verbose=True)
-                    download_track(task, logger=log_obj)
-                    task_tmp.rm()
-                else:
-                    print('No unprocessed URIs found.')
-                    break
-                if verbose_single and verbose:
-                    break
+        if max_daemons != -1:
+            return  # Return if all Daemons are running
+        # Always initiate the next daemon
+        all_daemon_files = range(len(glob(daemon_dir.format('*'))))
+        daemons = [i for i in all_daemon_files if
+                   os.path.isfile(daemon_dir.format(i))]
+        daemon_n = daemons[-1] + 1
+
+    # Initiate the DAEMON
+    daemon_name = daemon_dir.format(daemon_n)
+    daemon_tmp = Logger(daemon_name)
+    atexit.register(daemon_tmp.rm)
+
+    # Go through tasks
+    tried = []
+    while True:
+        # List tasks that are not running
+        uris = get_tasks()
+        uris = [u for u in uris if u not in tried]  # max tries
+        if len(uris) > 0:
+            # Initiate one task
+            task = uris[0]
+            tried.append(task)
+            task_tmp = Logger(u2t(daemon_n, task))
+            atexit.register(task_tmp.rm)
+            logger_path = log_dir.format(uri2path(task))
+
+            # Redirect stdout to log file if not verbose
+            if not verbose:
+                sys.stdout = open(logger_path.replace('json', 'txt'), "w")
+            log_obj = Logger(logger_path, verbose=True)
+            download_track(task, logger=log_obj)
+            task_tmp.rm()
+        else:
+            print('daemon_job finished: No unprocessed URIs found.')
+            break
+        if not verbose_continuous and verbose:
+            break
+
+
+if __name__ == '__main__':
+    daemon_job()
