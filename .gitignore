@@ -3,6 +3,7 @@
 __*/
 *.pyc
 *.pkl
+*.pqt
 *.json
 *.txt
 !requirements.txt

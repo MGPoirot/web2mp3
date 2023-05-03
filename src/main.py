@@ -7,7 +7,7 @@ from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
 import pandas as pd
 import re
-from song_db import set_song_db, get_song_db
+from song_db import set_song_db, get_song_db, song_db_template
 from download_daemon import start_daemons
 from unidecode import unidecode
 import click
@@ -285,7 +285,7 @@ def match_audio_with_tags(track_url: str, **kwargs):
     skip = True
     if not do_overwrite:
         skip = False
-    elif track_exists(artist_p, track_p, logger=logger):
+    elif track_exists(artist_p, track_p, logger=logger, print_space=ps):
         logger('Skipped: FileExists')
     elif tags_uri in song_db_indices:
         logger('Skipped: TagsExists')
@@ -297,32 +297,14 @@ def match_audio_with_tags(track_url: str, **kwargs):
         skip = False
 
     # Set song database entries
-    set_song_db(tags_uri)
-    set_song_db(source_uri)
-    set_song_db(track_uri)
+    set_song_db(tags_uri, overwrite=False)
+    set_song_db(track_uri, overwrite=False)
+    set_song_db(source_uri, overwrite=False)
     if not skip:
-        keys = 'print_space', 'max_daemons', 'verbose', 'verbose_continuous', \
-            'do_overwrite', 'quality'
-
-        # TODO: REMOVE THIS AS SOON AS OLD SONG DB HAS BEEN UPDATED
-        foo = get_song_db()
-        if not any(i for i in foo.columns if 'kwarg' in i):
-            import numpy as np
-            from initialize import song_db_file
-            kkeys = ['kwarg_' + k for k in keys]
-            for k in kkeys:
-                if '_space' in k or 'max_d' in k or '_quali' in k:
-                    dtype = {'dtype': pd.Int64Dtype()}
-                elif 'verbose' in k or 'do_overwrite' in k:
-                    dtype = {'dtype': pd.BooleanDtype()}
-                foo.insert(loc=len(foo.columns), column=k,
-                           value=pd.array(data=[np.nan] * len(foo), **dtype))
-            foo.to_pickle(song_db_file.format(''))
-            # TODO: SEE ABOVE
-
-        kwg_df = pd.Series({f'kwarg_{k}': kwargs[k] for k in keys})
-        track_tags = pd.concat([track_tags, kwg_df])
-        set_song_db(track_uri, track_tags)
+        kwg_df = pd.Series({k: kwargs[k.replace('_kwarg_', '')]
+                            for k in song_db_template if k[:7] == '_kwarg_'})
+        download_info = pd.concat([track_tags, kwg_df])
+        set_song_db(track_uri, download_info, overwrite=True)
         logger('Success: Download added\n')
     return
 

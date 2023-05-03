@@ -3,12 +3,13 @@ from utils import Logger, get_url_platform, get_path_components,\
     track_exists
 import os
 from glob import glob
-from song_db import get_song_db, set_song_db
+from song_db import get_song_db, set_song_db, pop_song_db
 from tag_manager import download_cover_img, set_file_tags
 import atexit
 import sys
 from multiprocessing import Process
 import click
+import pandas as pd
 
 
 def download_track(track_uri: str, logger=print):
@@ -22,28 +23,31 @@ def download_track(track_uri: str, logger=print):
     logger('Started download_track')
 
     # Retrieve and extract song properties from the song database
-    series = get_song_db().loc[track_uri]
+    download_info = get_song_db().loc[track_uri]
 
     # Unpack kwargs from track tags
-    idx = series.index.str.contains('kwarg')
-    kwargs = series[idx]
-    mp3_tags = series[~idx]
-    kwargs = kwargs.rename({k: k.replace('kwarg_', '') for k in kwargs.index})
+    idx = download_info.index.str.contains('_kwarg_')
+    kwargs = download_info[idx]
+    mp3_tags = download_info[~idx]
+    kwargs = kwargs.rename({k: k.replace('_kwarg_', '') for k in kwargs.index})
 
-    ps = kwargs.print_space
+    avoid_duplicates = kwargs.avoid_duplicates
     do_overwrite = kwargs.do_overwrite
+    ps = kwargs.print_space
     preferred_quality = kwargs.quality
+
+    # Get path components
     artist_p, album_p, track_p = get_path_components(mp3_tags)
 
     file_exists = False
-    if track_exists(artist_p, track_p):
-        file_exists = True
+    if avoid_duplicates and track_exists(artist_p, track_p):
         logger('Skipped: FileExists')
+        file_exists = True
     else:
         # Define paths
         album_dir = os.path.join(music_dir, artist_p, album_p)
         tr_prefix = None if mp3_tags.track_num is None else\
-            f'{mp3_tags.track_num[0]} - '
+            f'{mp3_tags.track_num} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
         os.makedirs(album_dir, mode=0o777, exist_ok=True)
@@ -68,7 +72,8 @@ def download_track(track_uri: str, logger=print):
             if do_overwrite:
                 logger('File Overwritten:'.ljust(ps), f'"{cov_fname}"')
                 os.remove(cov_fname)
-            download_cover_img(cov_fname, cover_url, logger=logger)
+            download_cover_img(cov_fname, cover_url, logger=logger,
+                               print_space=ps)
 
         # Specify downloading method
         download_method = get_url_platform(track_uri)
@@ -80,7 +85,7 @@ def download_track(track_uri: str, logger=print):
             os.remove(mp3_fname)
 
         # Download audio
-        download_method.audio_download(track_url, mp3_fname, quality,
+        download_method.audio_download(track_url, mp3_fname, preferred_quality,
                                        logger=logger)
 
         # Set file tags
@@ -111,7 +116,6 @@ def download_track(track_uri: str, logger=print):
 
 def syscall(verbose=False):
     # Initiates a daemon process depending on the operating system
-    __file__
     if verbose:
         if os.name == 'posix':
             os.system(f'python {__file__} --verbose')
@@ -166,7 +170,7 @@ def get_tasks() -> list:
               help="Number of DAEMONs to spawn as integer")
 @click.option("-v", "--verbose", is_flag=True, default=False,
               help="Whether to download in foreground as bool")
-@click.option("-s", "--verbose_continuous", is_flag=True, default=False,
+@click.option("-c", "--verbose_continuous", is_flag=True, default=False,
               help="When verbose, whether to continue after 1 item")
 def daemon_job(max_daemons=-1, verbose=False, verbose_continuous=False):
     # List daemons that are not running

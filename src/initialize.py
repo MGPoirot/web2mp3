@@ -9,7 +9,7 @@ from pathlib import Path as Path
 eyed3.log.setLevel("ERROR")
 
 
-class fPath(os.PathLike):
+class FmtPath(os.PathLike):
     """
     Appends format functionality to pathlib.Path defined objects.
     NB: returns regular Path objects.
@@ -54,9 +54,6 @@ def set_in_dot_env(key: str, value: str, overwrite=True):
         file.write(data)
 
 
-print_space = 24
-
-
 def sfy_validator(ans: str) -> bool:
     return all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
 
@@ -79,6 +76,8 @@ def run_setup_wizard():
 
     :return: None
     """
+    print_space = 24
+
     web2mp3home = Path.cwd()
     music_dir_default = web2mp3home / "Music"
 
@@ -146,7 +145,7 @@ home_dir = Path(os.environ.get('HOME_DIR'))
 music_dir = Path(os.environ.get('MUSIC_DIR'))
 daemon_dir = str(home_dir / '.daemons' / 'daemon-{}.tmp')
 log_dir = str(home_dir / '.logs' / '{}.json')
-song_db_file = str(home_dir / '{}song_db.pkl')
+song_db_file = str(home_dir / '{}song_db.pqt')
 
 # Check if a COOKIE_FILE is set
 if os.environ.get('COOKIE_FILE') is None:
