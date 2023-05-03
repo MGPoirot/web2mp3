@@ -26,14 +26,15 @@ def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
         features = timeout_handler(spotify_api.audio_features, track_item['uri'])[0]
         if features is not None:
             # Disc information
-            total_discs = spotify_api.album_tracks(
+            disc_num = track_item['disc_number']
+            disc_max = spotify_api.album_tracks(
                 album_id=album['uri'],
                 offset=album['total_tracks'] - 1,
             )['items'][-1]['disc_number']
-            disc_no = (track_item['disc_number'], total_discs)
 
             # Track number information
-            track_no = (track_item['track_number'], album['total_tracks'])
+            track_num = track_item['track_number']
+            track_max = album['total_tracks']
 
             # Artists information
             artist_items = track_item['artists']
@@ -50,12 +51,14 @@ def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
                 'artist': artists,
                 'internet_radio_url': track_item['uri'],
                 'cover': cover_img,
-                'disc_num': disc_no,
+                'disc_max': disc_max,
+                'disc_num': disc_num,
                 'genre': genres,
                 'release_date': album['release_date'],
                 'recording_date': album['release_date'],
                 'tagging_date': datetime.now().strftime('%Y-%m-%d'),
-                'track_num': track_no,
+                'track_max': track_max,
+                'track_num': track_num,
             })
     tag_series = pd.Series(tag_dict)
     return tag_series
@@ -94,8 +97,11 @@ def manual_track_tags(market='NL') -> pd.Series:
     return tag_series
 
 
-def set_file_tags(mp3_tags: dict, file_name: str, audio_source_url=None,
+def set_file_tags(mp3_tags: pd.Series, file_name: str, audio_source_url=None,
                   logger=print):
+    mp3_tags.track_num = (mp3_tags.track_num, mp3_tags.pop('track_max'))
+    mp3_tags.disc_num = (mp3_tags.disc_num, mp3_tags.pop('disc_max'))
+
     # Set mp3 file meta data
     audiofile = eyed3.load(file_name)
     for args in mp3_tags.items():
@@ -111,7 +117,8 @@ def set_file_tags(mp3_tags: dict, file_name: str, audio_source_url=None,
     logger('Successfully written file meta data')
 
 
-def download_cover_img(cover_img_path: str, cover_img_url: str, logger=print):
+def download_cover_img(cover_img_path: str, cover_img_url: str, logger=print,
+                       print_space=24):
     """ Downloads an image from a URL and stores at a given path."""
     # Retrieve image
     res = requests.get(cover_img_url, stream=True)

@@ -9,6 +9,7 @@ import sys
 import pandas as pd
 import re
 from glob import iglob
+
 eyed3.log.setLevel("ERROR")
 from time import sleep
 from importlib import import_module
@@ -28,7 +29,8 @@ def hms2s(hhmmss: str) -> int:
     """
     components = hhmmss.split(':')
     components.reverse()
-    return sum([int(value) * multiplier for value, multiplier in zip(components, (1, 60, 3600))])
+    return sum([int(value) * multiplier for value, multiplier in
+                zip(components, (1, 60, 3600))])
 
 
 def get_url_platform(track_url: str, logger: object = print):
@@ -62,12 +64,12 @@ def get_url_platform(track_url: str, logger: object = print):
         'soundcloud'
     """
     patterns = {'open.spotify.com': 'spotify',
-                'youtube.com':      'youtube',
-                'soundcloud.com':   'soundcloud',
-                'youtu.be':         'youtube',
-                'youtube:':         'youtube',
-                'spotify:':         'spotify',
-                'soundcloud:':      'soundcloud',}
+                'youtube.com': 'youtube',
+                'soundcloud.com': 'soundcloud',
+                'youtu.be': 'youtube',
+                'youtube:': 'youtube',
+                'spotify:': 'spotify',
+                'soundcloud:': 'soundcloud', }
     for pattern, domain in patterns.items():
         if pattern in track_url:
             # Identify the platform where the URL is from
@@ -76,7 +78,7 @@ def get_url_platform(track_url: str, logger: object = print):
             except ModuleNotFoundError:
                 return
             return module
-    logger(f'No pattern found in "{track_url}".'
+    logger(f'No pattern found in "{track_url}". '
            f'Known patterns: {"; ".join(patterns)}')
     return None
 
@@ -114,6 +116,7 @@ class Logger:
         :attr verbose: Whether to print log messages to console as well.
         :type verbose: bool
     """
+
     def __init__(self, full_path=None, verbose=False):
         """
         Initializes the logger.
@@ -153,7 +156,7 @@ class Logger:
         # Find out who called the logger
         curframe = inspect.currentframe()
         calframe = inspect.getouterframes(curframe, 2)
-        caller   = calframe[1][3]
+        caller = calframe[1][3]
 
         # See if this caller has recently logged anything
         log_dict = json_in(self.path)
@@ -195,8 +198,8 @@ def free_folder(directory: str, owner='pi', logger: object = print):
     """ Clear any access restrictions and set owner """
     os.system(f"sudo chmod 777 -R '{directory}'")
     os.system(f"sudo chown -R {owner}:{owner} '{directory}'")
-    #os.chmod(file, 0o0777)
-    #os.chown(file, pwd.getpwnam('plex').pw_uid, )
+    # os.chmod(file, 0o0777)
+    # os.chown(file, pwd.getpwnam('plex').pw_uid, )
     logger(f'Rights set to rwxrwsrwx and owner to {owner} for "{directory}"')
 
 
@@ -227,7 +230,8 @@ def input_is(control: str, input_str: str) -> bool:
         > input_is('Return', 'Ret')
         False
     """
-    return input_str.lower() == control.lower() or input_str.upper() == control[0]
+    return input_str.lower() == control.lower() or input_str.upper() == control[
+        0]
 
 
 def json_in(source: str):
@@ -360,7 +364,8 @@ def sanitize_track_name(track_name: str) -> str:
     return track_name
 
 
-def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
+def track_exists(artist_p: str, track_p: str, logger=print, print_space=24) -> \
+        bool:
     """
     Check if this song is already available, maybe in a different album
 
@@ -370,23 +375,20 @@ def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
     :param artist_p: artist directory path as string
     :param track_p:  track directory path as string
     :param logger:   logging object
+    :param print_space:   spacing of spaces
     :return:
     """
-    if not avoid_duplicates:
-        return False
 
     pattern = re.compile(re.escape(track_p).replace(r'\ ', r'[\s_]*'),
                          re.IGNORECASE | re.UNICODE)
     filepaths = iglob(os.path.join(music_dir, artist_p, '*', '*.mp3'))
-    # TODO: check if this solves the issue of not discerning track names from album names
     filenames = [os.path.basename(f) for f in filepaths]
     existing_tracks = [fn for fn in filenames if pattern.search(fn)]
     if any(existing_tracks):
-        logger('FileExistsWarning:')
-        for i, et in enumerate(existing_tracks, 1):
-            breakpoint()
-            logger(f'   {i})'.rjust(print_space),
-                   f'{et[len(str(music_dir.absolute())):]}')
+        logger('FileExistsWarning:\n',
+               *[f'{" " * 3}{i}){" " * 3}'
+                 f'{f.split(os.extsep)[0]}\n '
+                 for i, f in enumerate(existing_tracks, 1)])
     return any(existing_tracks)
 
 
@@ -394,7 +396,7 @@ def get_path_components(mp3_tags: pd.Series) -> list:
     # Returns the path valid components required to create the file path for
     # storing from a mp3 tags pandas series
     return [rm_char(f) for f in
-     (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
+            (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
 
 
 def strip_url(url: str) -> str:
@@ -428,7 +430,3 @@ def timeout_handler(func, *args, **kwargs):
                 return None
             else:
                 sleep(1)
-
-
-
-
