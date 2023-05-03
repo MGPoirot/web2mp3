@@ -3,13 +3,12 @@ from utils import Logger, get_url_platform, get_path_components,\
     track_exists
 import os
 from glob import glob
-from song_db import get_song_db, set_song_db, pop_song_db
+from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
 import atexit
 import sys
 from multiprocessing import Process
 import click
-import pandas as pd
 
 
 def download_track(track_uri: str, logger=print):

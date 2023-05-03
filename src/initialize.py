@@ -1,6 +1,5 @@
 import dotenv
 from spotipy.oauth2 import SpotifyClientCredentials
-from importlib.machinery import SourceFileLoader
 import os
 import spotipy
 import eyed3
