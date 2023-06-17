@@ -53,7 +53,7 @@ def get_song_db() -> pd.DataFrame:
     try:
         # Test if the file can be loaded
         sdb = pd.read_parquet(sdb_path)
-    except UnicodeDecodeError:
+    except:  #OSError, but also cramjam.DecompressionError
         print('The song data base was corrupted. Loading from backup.')
         shutil.copy(tmp_path, sdb_path)
         sdb = pd.read_parquet(sdb_path)
@@ -73,6 +73,11 @@ def get_song_db() -> pd.DataFrame:
 
 def set_song_db(uri: str, value=None, overwrite=True):
     """ Set a value to a key (=short URL) in the song database """
+    if uri is None:
+        # This can happen when the track_url is
+        # None because tags were created manually.
+        return
+
     song_db = get_song_db()
     if uri in song_db.index and not overwrite:
         return
