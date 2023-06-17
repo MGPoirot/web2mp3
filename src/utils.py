@@ -3,14 +3,11 @@ import pickle
 import os
 import inspect
 from datetime import datetime
-import eyed3
 import json
 import sys
 import pandas as pd
 import re
 from glob import iglob
-
-eyed3.log.setLevel("ERROR")
 from time import sleep
 from importlib import import_module
 
@@ -364,8 +361,7 @@ def sanitize_track_name(track_name: str) -> str:
     return track_name
 
 
-def track_exists(artist_p: str, track_p: str, logger=print, print_space=24) -> \
-        bool:
+def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
     """
     Check if this song is already available, maybe in a different album
 
@@ -385,11 +381,11 @@ def track_exists(artist_p: str, track_p: str, logger=print, print_space=24) -> \
     filenames = [os.path.basename(f) for f in filepaths]
     existing_tracks = [fn for fn in filenames if pattern.search(fn)]
     if any(existing_tracks):
-        logger('FileExistsWarning:\n',
+        logger(f'FileExistsWarning: {track_p} - {artist_p}\n ',
                *[f'{" " * 3}{i}){" " * 3}'
                  f'{f.split(os.extsep)[0]}\n '
                  for i, f in enumerate(existing_tracks, 1)])
-    return any(existing_tracks)
+    return existing_tracks
 
 
 def get_path_components(mp3_tags: pd.Series) -> list:
@@ -405,6 +401,7 @@ def strip_url(url: str) -> str:
 
 
 def timeout_handler(func, *args, **kwargs):
+    max_time_outs = 10
     """
     The Spotify API might return HTTPSTimeOutErrors, not frequently, but it can
     happen. In these cases, we do not want to give up and call the entire

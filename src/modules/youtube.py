@@ -113,3 +113,11 @@ def search(search_query, **kwargs):
     ).result()
     items = results['result']
     return items
+
+
+def t_extractor(*items, query_duration=1) -> list:
+    # Returns duration of a track from a list of tracks as float
+    res = [hms2s(i['duration']) / query_duration for i in items]
+    if len(res) == 1:
+        res = res[0]
+    return res

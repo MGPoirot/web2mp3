@@ -115,39 +115,43 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
     logger(f'Searching {platform.name} for:'.ljust(ps), f'"{qstr}"')
     items = platform.search(search_query, **kwargs)
 
+    # Sort the item list by relative durations
+    rel_ts = platform.t_extractor(*items, query_duration=query.duration)
+    sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
+        rel_ts))))
+    items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
+
     # Check if one of our search results matches our query
-    for n, item in enumerate(items, 1):
+    for n, (item, rel_t) in enumerate(items_and_durations, 1):
         # Extract information from our query results
         if platform.name == 'spotify':
-            item_duration = item['duration_ms'] / 1000
             item_tags = get_track_tags(item, do_light=True)
             name = item_tags.title
             artist = item_tags.album_artist
-            item_descriptor = f'{name} - {artist}'
+            item_desc = f'{name} - {artist}'
         elif platform.name == 'youtube':
-            item_duration = hms2s(item['duration'])
-            item_descriptor = item['title']
+            item_desc = item['title']
             title = item['title']
         else:
             logger(f'Unknown platform "{platform}"')
             break
 
-        # Check how the duration matches up with what we are looking for
-        relative_duration = item_duration / query.duration
-        is_duration_match = abs(relative_duration - 1) < duration_tolerance
-
         # Print a synopsis of our search result
-        logger(''.rjust(ps),
-               f'{n}) {item_descriptor[:47].ljust(47)} {relative_duration:.0%}')
+        logger(''.rjust(ps), f'{n}) {item_desc[:47].ljust(47)} {rel_t:.0%}')
+
+        # Check how the duration matches up with what we are looking for
+        is_duration_match = abs(rel_t - 1) < duration_tolerance
+
         # Check if the search result is a match
         if is_clear_match(name, artist, title) and is_duration_match:
             logger(f'Clear {platform.name} match:'.ljust(ps),
-                   f'{item_descriptor}')
+                   f'{item_desc}')
             if platform.name == 'spotify':
                 matched_obj = get_track_tags(item, do_light=False)
             else:
+                item_duration = platform.t_extractor(item)
                 matched_obj = pd.Series({'track_url': item['link'],
-                                         'video_title': item_descriptor,
+                                         'video_title': item_desc,
                                          'duration': item_duration})
             break
 
@@ -175,17 +179,17 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
 
                 if platform.name == 'spotify':
                     matched_obj = get_track_tags(track_item=selected_item)
-                    item_descriptor = f'{matched_obj.title} - ' \
+                    item_desc = f'{matched_obj.title} - ' \
                                       f'{matched_obj.album_artist}'
                 elif platform.name == 'youtube':
                     item = selected_item
-                    item_descriptor = item['title']
+                    item_desc = item['title']
                     item_duration = hms2s(item['duration'])
                     matched_obj = pd.Series({'track_url': item['link'],
-                                             'video_title': item_descriptor,
+                                             'video_title': item_desc,
                                              'duration': item_duration})
                 logger(f'Match accepted by {accept_origin}: '
-                       f''.ljust(ps), item_descriptor)
+                       f''.ljust(ps), item_desc)
 
         elif input_is('Retry', proceed):
             logger(f'Provide new info for {platform.name} query: ')
@@ -196,7 +200,8 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
         elif input_is('Manual', proceed):
             if platform.name == 'spotify':
                 logger('Provide manual track info: ')
-                matched_obj = manual_track_tags(market=market)
+                matched_obj = manual_track_tags(market=market,
+                                                duration=query.duration)
             elif platform.name == 'youtube':
                 matched_obj = input('>>> Provide YouTube URL: '
                                     ''.ljust(ps)).split('&')[0]
@@ -232,6 +237,7 @@ def match_audio_with_tags(track_url: str, **kwargs):
     ps = kwargs['print_space']
     market = kwargs['market']
     do_overwrite = kwargs['do_overwrite']
+    avoid_duplicates = kwargs['avoid_duplicates']
 
     # Create a logger object for this URL
     logger_path = log_dir.format(shorten_url(track_url))
@@ -276,36 +282,37 @@ def match_audio_with_tags(track_url: str, **kwargs):
 
     track_uri, track_tags = source.sort_lookup(query, match_obj)
     tags_uri = get_tags_uri(track_tags)
-    source_uri = source.url2uri(track_url)  # 1 id may >1  urls
+    source_uri = source.url2uri(track_url)  # 1 id may >1 urls
 
-    #  Check if the found tracks is already in the database
-    song_db_indices = get_song_db().index
-    artist_p, _, track_p = get_path_components(track_tags)
+    # Check two things to know if we need to process the request:
+    errs = []
 
-    skip = True
+    # 1) Check if the file, or a similar file does not exist already
+    if avoid_duplicates:
+        artist_p, _, track_p = get_path_components(track_tags)
+        if any(track_exists(artist_p, track_p, logger=logger)):
+            errs.append('FileExists')
+
+    #  2) Check if the found tracks is already in the database
     if not do_overwrite:
-        skip = False
-    elif track_exists(artist_p, track_p, logger=logger, print_space=ps):
-        logger('Skipped: FileExists')
-    elif tags_uri in song_db_indices:
-        logger('Skipped: TagsExists')
-    elif track_uri in song_db_indices:
-        logger('Skipped: TrackExists')
-    elif source_uri in song_db_indices:
-        logger('Skipped: SourceExists')
-    else:
-        skip = False
+        song_db_indices = get_song_db().index
+        ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
+        errs.extend([err for err, idx in ctrl if idx in song_db_indices])
 
-    # Set song database entries
-    set_song_db(tags_uri, overwrite=False)
-    set_song_db(track_uri, overwrite=False)
-    set_song_db(source_uri, overwrite=False)
-    if not skip:
+    if any(errs):
+        set_song_db(track_uri, overwrite=False)
+        logger('Skipped:', *[f'{e}Exists' for e in errs])
+    else:
+        # Define download settings
         kwg_df = pd.Series({k: kwargs[k.replace('_kwarg_', '')]
                             for k in song_db_template if k[:7] == '_kwarg_'})
         download_info = pd.concat([track_tags, kwg_df])
+
+        # Set song database entries
         set_song_db(track_uri, download_info, overwrite=True)
         logger('Success: Download added\n')
+    set_song_db(tags_uri, overwrite=False)
+    set_song_db(source_uri, overwrite=False)
     return
 
 
@@ -363,7 +370,13 @@ def main(**kwargs):
     if not headless:
         while True:
             input_url = input('>>> URL or [Abort]?'.ljust(ps))
-            if not input_url or input_is('Abort', input_url):
+            if input_is('Help', input_url):
+                with click.Context(click_processor) as ctx:
+                    click.echo(click_processor.get_help(ctx))
+            elif input_is('Params', input_url):
+                for k, v in kwargs.items():
+                    print(k.ljust(20), v)
+            elif not input_url or input_is('Abort', input_url):
                 print('Bye Bye!')
                 sys.exit()
             else:

@@ -5,10 +5,17 @@ from datetime import datetime
 import eyed3
 import requests
 import shutil
+eyed3.log.setLevel("ERROR")
 
 
 def get_tags_uri(track_tags: pd.Series) -> str:
-    return track_tags.internet_radio_url.replace(':track', '')
+    """
+    The internet_radio_url field is None when entered manually.
+    """
+    tags_uri = track_tags.internet_radio_url
+    if tags_uri is not None:
+        tags_uri = tags_uri.replace(':track', '')
+    return tags_uri
 
 
 def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
@@ -23,64 +30,81 @@ def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
         'duration': track_item['duration_ms'] / 1000,
     }
     if not do_light:
-        features = timeout_handler(spotify_api.audio_features, track_item['uri'])[0]
+        features = timeout_handler(
+            func=spotify_api.audio_features,
+            tracks=track_item['uri'],
+        )[0]
         if features is not None:
-            # Disc information
-            disc_num = track_item['disc_number']
-            disc_max = spotify_api.album_tracks(
-                album_id=album['uri'],
-                offset=album['total_tracks'] - 1,
-            )['items'][-1]['disc_number']
+            tag_dict.update({'bpm': int(features['tempo']), })
+        # Disc information
+        disc_num = track_item['disc_number']
+        disc_max = timeout_handler(
+            func=spotify_api.album_tracks,
+            album_id=album['uri'],
+            offset=album['total_tracks'] - 1,
+        )['items'][-1]['disc_number']
 
-            # Track number information
-            track_num = track_item['track_number']
-            track_max = album['total_tracks']
+        # Track number information
+        track_num = track_item['track_number']
+        track_max = album['total_tracks']
 
-            # Artists information
-            artist_items = track_item['artists']
-            artists = '; '.join([a['name'] for a in artist_items])
+        # Artists information
+        artist_items = track_item['artists']
+        artists = '; '.join([a['name'] for a in artist_items])
 
-            # Genre information
-            genres = [spotify_api.artist(a['uri'])['genres'] for a in
-                      artist_items]
-            genres = '; '.join(flatten(genres))
-            cover_img = album['images'][0]['url'] if any(album['images']) else None
+        # Genre information
+        genres = [timeout_handler(
+            func=spotify_api.artist,
+            artist_id=a['uri']
+        )['genres'] for a in artist_items]
+        genres = '; '.join(flatten(genres))
+        cover_img = album['images'][0]['url'] if any(album['images']) else None
 
-            tag_dict.update({
-                'bpm': int(features['tempo']),
-                'artist': artists,
-                'internet_radio_url': track_item['uri'],
-                'cover': cover_img,
-                'disc_max': disc_max,
-                'disc_num': disc_num,
-                'genre': genres,
-                'release_date': album['release_date'],
-                'recording_date': album['release_date'],
-                'tagging_date': datetime.now().strftime('%Y-%m-%d'),
-                'track_max': track_max,
-                'track_num': track_num,
-            })
+        tag_dict.update({
+            'artist': artists,
+            'internet_radio_url': track_item['uri'],
+            'cover': cover_img,
+            'disc_max': disc_max,
+            'disc_num': disc_num,
+            'genre': genres,
+            'release_date': album['release_date'],
+            'recording_date': album['release_date'],
+            'tagging_date': datetime.now().strftime('%Y-%m-%d'),
+            'track_max': track_max,
+            'track_num': track_num,
+        })
     tag_series = pd.Series(tag_dict)
     return tag_series
 
 
-def manual_track_tags(market='NL') -> pd.Series:
+def manual_track_tags(market='NL', duration=None, print_space=24) -> pd.Series:
     tag_dict = {
         'album': input('>>> Album name?'.ljust(print_space)) or None,
         'album_artist': input('>>> Artist name?'.ljust(print_space)),
         'artist': None,
-        'internet_radio_url': 'manual',
+        'bpm': None,
+        'duration': duration,
+        'internet_radio_url': None,
         'cover': input('>>> Cover URL?'.ljust(print_space)) or None,
-        'disc_num': 1,
+        'disc_num': input('>>> Disc No.?'.ljust(print_space)) or 1,
+        'disc_max': None,
         'genre': None,
+        'recording_date': None,
         'release_date': input('>>> Album year?'.ljust(print_space)) or None,
         'tagging_date': datetime.now().strftime('%Y-%m-%d'),
         'title': input('>>> Track name?'.ljust(print_space)),
-        'track_num': input('>>> Track No.?'.ljust(print_space)) or None,
+        'track_num': input('>>> Track No.?'.ljust(print_space)) or 1,
+        'track_max': input('>>> No. album tracks?'.ljust(print_space)) or None,
     }
+
+    # Set dependent fields
+    for a, b in [('disc_max', 'disc_num'),
+                 ('track_max', 'track_num'),
+                 ('artist', 'album_artist'),
+                 ('recording_date', 'release_date')]:
+        tag_dict[a] = tag_dict[b] if tag_dict[a] is None else tag_dict[a]
+
     tag_series = pd.Series(tag_dict)
-    tag_series.artist = tag_series.album_artist
-    tag_series.recording_date = tag_series.release_date
     if tag_series.album is None:
         tag_series.album = tag_series.title
     found_artist = timeout_handler(spotify_api.search,
@@ -90,7 +114,7 @@ def manual_track_tags(market='NL') -> pd.Series:
                                    type='artist',
                                    )['artists']['items'][0]
     is_artist = input(f'>>> Is this the artist you were looking for? '
-                      f'"{found_artist["name"]}" [Yes]/No') or 'Yes'
+                      f'"{found_artist["name"]}" [Yes]/No  ') or 'Yes'
     if not input_is('No', is_artist):
         tag_series.artist = found_artist["name"]
         tag_series.genre = ';'.join(found_artist['genres'])
@@ -99,6 +123,7 @@ def manual_track_tags(market='NL') -> pd.Series:
 
 def set_file_tags(mp3_tags: pd.Series, file_name: str, audio_source_url=None,
                   logger=print):
+    breakpoint()
     mp3_tags.track_num = (mp3_tags.track_num, mp3_tags.pop('track_max'))
     mp3_tags.disc_num = (mp3_tags.disc_num, mp3_tags.pop('disc_max'))
 

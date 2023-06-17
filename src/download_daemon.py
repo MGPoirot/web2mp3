@@ -1,5 +1,5 @@
 from initialize import music_dir, daemon_dir, log_dir
-from utils import Logger, get_url_platform, get_path_components,\
+from utils import Logger, get_url_platform, get_path_components, \
     track_exists
 import os
 from glob import glob
@@ -39,13 +39,13 @@ def download_track(track_uri: str, logger=print):
     artist_p, album_p, track_p = get_path_components(mp3_tags)
 
     file_exists = False
-    if avoid_duplicates and track_exists(artist_p, track_p):
+    if avoid_duplicates and any(track_exists(artist_p, track_p)):
         logger('Skipped: FileExists')
         file_exists = True
     else:
         # Define paths
         album_dir = os.path.join(music_dir, artist_p, album_p)
-        tr_prefix = None if mp3_tags.track_num is None else\
+        tr_prefix = None if mp3_tags.track_num is None else \
             f'{mp3_tags.track_num} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
@@ -63,16 +63,15 @@ def download_track(track_uri: str, logger=print):
         else:
             cover_url = mp3_tags.pop('cover')
 
+        cov_exists = os.path.isfile(cov_fname)
         if cover_url is None:
             logger('ValueError: No cover URL set.')
-        elif os.path.isfile(cov_fname) and not do_overwrite:
+        elif cov_exists and not do_overwrite:
             logger('FileExistsWarning:', cov_fname)
         else:
-            if do_overwrite:
+            if cov_exists:
                 logger('File Overwritten:'.ljust(ps), f'"{cov_fname}"')
-                os.remove(cov_fname)
-            download_cover_img(cov_fname, cover_url, logger=logger,
-                               print_space=ps)
+            download_cover_img(cov_fname, cover_url, logger=logger, print_space=ps)
 
         # Specify downloading method
         download_method = get_url_platform(track_uri)
@@ -165,16 +164,21 @@ def get_tasks() -> list:
 
 @click.command()
 @click.version_option()
-@click.option("-x", "--max_daemons", default=-1,
+@click.option("-x", "--max_daemons", default=4,
               help="Number of DAEMONs to spawn as integer")
 @click.option("-v", "--verbose", is_flag=True, default=False,
               help="Whether to download in foreground as bool")
 @click.option("-c", "--verbose_continuous", is_flag=True, default=False,
               help="When verbose, whether to continue after 1 item")
-def daemon_job(max_daemons=-1, verbose=False, verbose_continuous=False):
+def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
     # List daemons that are not running
     daemon_ns = [i for i in range(max_daemons) if
                  not os.path.isfile(daemon_dir.format(i))]
+
+    if max_daemons == -1:
+        # For -1 we always add a daemon
+        daemon_ns = [i for i in range(len(glob(daemon_dir.format('*'))) + 1) if
+                     not os.path.isfile(daemon_dir.format(i))]
 
     if len(daemon_ns):
         daemon_n = daemon_ns[0]  # Get the first DAEMON that is not running
@@ -185,6 +189,7 @@ def daemon_job(max_daemons=-1, verbose=False, verbose_continuous=False):
         all_daemon_files = range(len(glob(daemon_dir.format('*'))))
         daemons = [i for i in all_daemon_files if
                    os.path.isfile(daemon_dir.format(i))]
+        breakpoint()
         daemon_n = daemons[-1] + 1
 
     # Initiate the DAEMON
