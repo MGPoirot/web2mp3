@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('src')
 from initialize import log_dir
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
@@ -180,7 +181,7 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
                 if platform.name == 'spotify':
                     matched_obj = get_track_tags(track_item=selected_item)
                     item_desc = f'{matched_obj.title} - ' \
-                                      f'{matched_obj.album_artist}'
+                                f'{matched_obj.album_artist}'
                 elif platform.name == 'youtube':
                     item = selected_item
                     item_desc = item['title']
@@ -202,6 +203,7 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
                 logger('Provide manual track info: ')
                 matched_obj = manual_track_tags(market=market,
                                                 duration=query.duration)
+                matched_obj['internet_radio_url'] = query['track_url']
             elif platform.name == 'youtube':
                 matched_obj = input('>>> Provide YouTube URL: '
                                     ''.ljust(ps)).split('&')[0]
