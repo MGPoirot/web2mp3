@@ -116,6 +116,10 @@ def syscall(verbose=False):
     # Initiates a daemon process depending on the operating system
     if verbose:
         if os.name == 'posix':
+            # TODO: Fix file access issues on Linus:
+            #  I am still getting directory access issues on Linux
+            # such that I need to run the code as sudo, and then reset the
+            # file permissions to 777. This is not ideal.
             os.system(f'python {__file__} --verbose')
         else:
             os.system(f'python {__file__} --verbose')
@@ -127,6 +131,25 @@ def syscall(verbose=False):
 
 
 def start_daemons(max_daemons=4, verbose=False):
+    """
+    .. py:function:: start_daemons(max_daemons=4, verbose=False)
+
+    Initiates a number of downloading Daemons.
+    Uses the multiprocessing module to initiate a number of daemon processes
+    depending on the operating system. If verbose, it will only start one in the
+    foreground.
+
+    :param int max_daemons: The number up until new daemons will be started.
+    :param bool verbose: Whether to run the daemon process in the foreground
+
+    :return: Number of daemon processes started
+    :rtype: int
+
+    :Example:
+
+    >>> start_daemons(max_daemons=4)
+    4
+    """
     if verbose:
         syscall(verbose)
         return 1
@@ -144,21 +167,68 @@ def start_daemons(max_daemons=4, verbose=False):
 
 
 def uri2path(uri: str) -> str:
-    # Converts a uri to a path,
-    # eg. 'youtube:1U2WcqVZhvw' -> 'youtube-1U2WcqVZhvw'
+    """
+    .. py:function:: uri2path(uri)
+
+    URI to PATH
+    Converts a URI to a path.
+
+    :param str uri: URI of the audio source
+
+    :return: Identifier specified as path
+    :rtype: str
+
+    :Example:
+
+    >>> uri2path('youtube:1U2WcqVZhvw')
+    'youtube-1U2WcqVZhvw'
+    """
     return uri.replace(':', '-')
 
 
-def u2t(n, uri: str) -> str:
-    # Formats a daemon dir temp file name
+def uri2tmp(n, uri: str) -> str:
+    """ URI to TMP
+    Returns a formatted daemon temporary file name as string.
+    Temporary files are used to track which file is being worked at
+
+    PARAMETERS:
+    :param n    Identifier of the Daemon
+    :type n     int or str
+    :param uri  URI of the audio source
+    :type uri   str
+
+    RETURNS:
+    :return: Formatted daemon temporary file name as string
+
+    EXAMPLE:
+    >>> uri2tmp('*', 'youtube:y1SHa1AkHkQ')
+    '.../.daemons/daemon-*_youtube-1U2WcqVZhvw.tmp'
+    """
     return daemon_dir.format(f'{n}_{uri2path(uri)}')
 
 
 def get_tasks() -> list:
-    # List tasks that have not been done and that are not running
+    """ Get tracks to download
+    Return a list to tracks to download. Or more explicitly: Return a list of
+    track audio sources that have been added to the song database (song_db),
+    but for which the download process - and consequently, the setting of its
+    song_db entry to None - has not yet been completed.
+
+    PARAMETERS:
+
+    RETURNS:
+    :return: Track audo sources as strings
+    :rtype:  list
+
+    EXAMPLE:
+    >>> get_tasks()
+    ['youtube:y1SHa1AkHkQ', 'youtube:y1SHa1AkHkQ']
+    """
+    #
+    # Here 'tasks' means 'tracks that have not been downloaded yet'.
     song_db = get_song_db()
     uris = song_db[song_db.title.notna()].index  # finish
-    uris = [u for u in uris if not any(glob(u2t('*', u)))]  # busy
+    uris = [u for u in uris if not any(glob(uri2tmp('*', u)))]  # busy
     return uris
 
 
@@ -207,7 +277,7 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
             # Initiate one task
             task = uris[0]
             tried.append(task)
-            task_tmp = Logger(u2t(daemon_n, task))
+            task_tmp = Logger(uri2tmp(daemon_n, task))
             atexit.register(task_tmp.rm)
             logger_path = log_dir.format(uri2path(task))
 
