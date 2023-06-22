@@ -123,14 +123,24 @@ def manual_track_tags(market='NL', duration=None, print_space=24) -> pd.Series:
 
 def set_file_tags(mp3_tags: pd.Series, file_name: str, audio_source_url=None,
                   logger=print):
-    breakpoint()
+    # We drop values that were not set ing the song_db, for example when track
+    # metadata was added manually.
+    mp3_tags = mp3_tags.dropna()
+
+    # We can set most track metadata fields directly, but track and disc number
+    # are tuples and have to be constructed, since tuples could not be stored in
+    # the parquet file format.
     mp3_tags.track_num = (mp3_tags.track_num, mp3_tags.pop('track_max'))
     mp3_tags.disc_num = (mp3_tags.disc_num, mp3_tags.pop('disc_max'))
 
-    # Set mp3 file meta data
+    # Load the audio file
     audiofile = eyed3.load(file_name)
+
+    # Set the track metadata
     for args in mp3_tags.items():
         audiofile.tag.__setattr__(*args)
+
+    # Set some additional fields, logging our tagging process
     if audio_source_url is not None:
         audiofile.tag.audio_source_url = audio_source_url
         internet_radio_url = mp3_tags['internet_radio_url']
