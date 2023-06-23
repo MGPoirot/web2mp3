@@ -1,18 +1,19 @@
 <img align="right" width="200" height="200" src="res/logo.svg"></img>
 # Web2mp3 - Music Download CLI
-A scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
+A fully automatic scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
 ## How to use
 
 **Python Wizard**
 
-Easiest is calling `python main.py` which will start the Python Wizard that will help you provide input:
+Easiest is calling `python src/main.py` which will start the Wizard that will 
+help you provide input:
 
 ```python
 >>> URL or [Abort]?      https://www.youtube.com/watch?v=NgE5mEQiizQ
 Searching Spotify for    Dirty South Hip Hop - Royalty Free Music - Topic
-                         1) Dirty South - PANDSHAFT                          87%
-                         2) Dirty South Hip Hop - Royalty Free Music        100%
-Clear Spotify match      Dirty South Hip Hop - Royalty Free Music Instrumentals and Horror Soundscapes - Royalty Free Music
+                         1) Dirty South Hip Hop - Royalty Free Music        100%
+                         
+Clear Spotify match      Dirty South Hip Hop - Royalty Free Music Instrumenta...
 Success: Song DB entry created.
 
 >>> URL or [Abort]?      https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
@@ -23,27 +24,53 @@ Success: Song DB entry created.
 
 >>> URL or [Abort]?      
 ```
+Each call to the Wizard should take about a second, since downloading is 
+performed in the background using a daemon, and mp3 tags are applied.  
 
-Each call to the Wizard should take about a second, since downloading is performed in the background using a daemon, and mp3 tags are applied.
+Alternatively you can call the program straight from the command line. The
+program does not require URL sanitation (although your shell might):
 
-**Command line calls:**
+```
+(demo_env) python src/main.py https://www.youtube.com/watch?v=NgE5mEQiizQ
+```
 
-Alternatively you can call the program straight from the command line. The program does not require URL sanitation (although your shell might):
+**Command line arguments**
+Use `src/main.py --help` for parameter options. You can also, after starting the 
+wizard -instead of providing a URL- pass `params` to print a list of the current
+state of all parameters for inspection.
 
-* Single track call:
-  * `python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ`
-  * `python main.py https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM`
-* Single playlist or album call:
-  * `python main.py https://www.youtube.com/playlist?v=NgE5mEQiizQ`
-  * `python main.py https://open.spotify.com/playlist/37i9dQZF1E4ynkTq5aVuVE`
-  * `python main.py https://open.spotify.com/album/6O7y09nb8sWjqQBkPqSOg1`
-* Multiple calls, separated by spaces:
-  * `python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM`
+For example, pass the `quality` flag to set download quality to 123 kB/s, the 
+`reponse` flag to set the default response for an unclear match to the first :
+(closest match) option, and set the `-d` flag to allow for duplicate songs (e.g,
+songs with the same name, for the same author, but on a different album):
+```
+(demo_env) python src/main.py --quality 123 --response 1 -d`
+>>> URL or [Abort]?     params
+quality              123
+response             1
+avoid_duplicates     False
+urls                 ()
+max_daemons          4
+headless             False
+init_daemons         During
+verbose              False
+verbose_continuous   False
+tolerance            0.1
+market               NL
+search_limit         5
+do_overwrite         False
+print_space          24
+max_time_outs        10
+```
+**Suppored URLS**
+Both YouTube URLs as Spotify URLs are accepted. My advise is to primarily use 
+Spotify URLs, since YouTube URLs can include video clip chatter.   
 
-## Supported platforms
+Both single songs as collections are accepted such as YouTube playlists, Spotify
+Playlists and Spotify Albums.
 
-URLs from YouTube and Spotify are supported. SoundCloud support is coming soon.
-
+URLs from YouTube and Spotify are supported. SoundCloud support is coming but 
+has no priority.
 
 ## Get started in 60 Seconds
 https://user-images.githubusercontent.com/38399483/234430966-bc7fc4d3-1339-4e9a-97df-a430ecfc70ba.mp4
