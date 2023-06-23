@@ -5,6 +5,7 @@ import spotipy
 import eyed3
 import re
 from pathlib import Path as Path
+
 eyed3.log.setLevel("ERROR")
 
 
@@ -13,6 +14,7 @@ class FmtPath(os.PathLike):
     Appends format functionality to pathlib.Path defined objects.
     NB: returns regular Path objects.
     """
+
     def __init__(self, *args, **kwargs):
         self._path = Path(*args, **kwargs)
 
@@ -61,7 +63,7 @@ def pth_validator(ans: str) -> bool:
     return Path(ans).parent.is_dir()
 
 
-def market_validator(market: str ) -> bool:
+def market_validator(market: str) -> bool:
     """
     Check if a market is a valid Spotify market
 
@@ -103,25 +105,20 @@ def run_setup_wizard():
 
     :return: None
     """
-    print_space = 24
-
-    web2mp3home = Path.cwd()
-    music_dir_default = web2mp3home / "Music"
-    market_default =  "US"
+    music_dir_default = home_dir / "Music"
+    market_default = "US"
 
     qs = {
-        'HOME_DIR':                ('Web2MP3 home directory',
-                                    pth_validator,  web2mp3home),
-        'MUSIC_DIR':               ('Music download directory',
-                                    pth_validator,  music_dir_default),
-        '# Spotify username':      ('Spotify username (optional)',
-                                    lambda x: True, 'None'),
-        'SPOTIPY_CLIENT_ID':       ('Spotify client ID',
-                                    sfy_validator,  None),
-        'SPOTIPY_CLIENT_SECRET':   ('Spotify client secret',
-                                    sfy_validator,  None),
-        'SPOTIFY_MARKET':          ('Spotify market',
-                                    market_validator,  market_default)
+        'MUSIC_DIR': ('Music download directory',
+                      pth_validator, music_dir_default),
+        '# Spotify username': ('Spotify username (optional)',
+                               lambda x: True, 'None'),
+        'SPOTIPY_CLIENT_ID': ('Spotify client ID',
+                              sfy_validator, None),
+        'SPOTIPY_CLIENT_SECRET': ('Spotify client secret',
+                                  sfy_validator, None),
+        'SPOTIFY_MARKET': ('Spotify market',
+                           market_validator, market_default)
     }
     print("                         , - ~ ~ ~ - ,                           \n"
           "                     , '   WEB 2 MP3   ' ,                       \n"
@@ -143,7 +140,7 @@ def run_setup_wizard():
             q_fmt = f'What is your {question}?'
             default = default if not os.environ.get(k) else os.environ.get(k)
             d_fmt = f'[{default}]' if default else ''
-            answer = input(f'  {i}. {q_fmt.ljust(print_space)}\n'
+            answer = input(f'  {i}. {q_fmt.ljust(24)}\n'
                            f'    {d_fmt}\n')
             answer = default if not answer and default else answer
             if validator(answer):
@@ -155,6 +152,9 @@ def run_setup_wizard():
           'Web2MP3 set up successful.')
 
 
+# Where are we?
+home_dir = Path(__file__).parents[1]
+
 # Check if Web2MP3 has been set up.
 ENV_PATH = Path('.config', '.env')
 if not dotenv.find_dotenv(ENV_PATH):
@@ -163,7 +163,7 @@ if not dotenv.find_dotenv(ENV_PATH):
 dotenv.load_dotenv(ENV_PATH)
 
 # Check if setup file is complete, if not, resume setup
-env_keys = 'HOME_DIR', 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID',\
+env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', \
     'SPOTIPY_CLIENT_SECRET', 'SPOTIFY_MARKET'
 env_vals = [os.environ.get(v) for v in env_keys]
 if None in env_vals:
@@ -172,9 +172,11 @@ if None in env_vals:
 dotenv.load_dotenv(ENV_PATH)
 
 # Define paths from config env
-home_dir = Path(os.environ.get('HOME_DIR'))
 music_dir = Path(os.environ.get('MUSIC_DIR'))
 default_market = os.environ.get('SPOTIFY_MARKET')
+
+# Maybe I will replace the use of string with Path objects here as well in the
+# future, but currently, nothing is broken so no need to fix anything.
 daemon_dir = str(home_dir / '.daemons' / 'daemon-{}.tmp')
 log_dir = str(home_dir / '.logs' / '{}.json')
 song_db_file = str(home_dir / '{}song_db.pqt')
