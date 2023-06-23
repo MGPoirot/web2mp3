@@ -1,5 +1,5 @@
 from pathlib import Path
-from initialize import music_dir
+from initialize import music_dir, default_market
 from modules import spotify
 from utils import rm_char, track_exists, timeout_handler, pickle_out, pickle_in
 import os

@@ -56,7 +56,7 @@ init_daemons         During
 verbose              False
 verbose_continuous   False
 tolerance            0.1
-market               NL
+market               US
 search_limit         5
 do_overwrite         False
 print_space          24
@@ -184,9 +184,9 @@ inversely, find the right audio to download to a Spotify track.
 
 * `default_market` The Spotify API market as string.
     Not all tracks are available on every market. This way, the search result
-    during matching might not return the expected results. Default is "NL", it
-    is advised to set this setting to your nationality. See the Spotify API
-    guide for accepted market strings:
+    during matching might not return the expected results. Default is set upon 
+    initialization is advised to set this setting to your nationality. See the 
+    Spotify API guide for accepted market strings:
     https://engineering.atspotify.com/2015/03/understanding-spotify-web-api/
 
 * `search_limit` The Number of tracks to check for match as integer.
