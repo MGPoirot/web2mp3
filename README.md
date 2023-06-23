@@ -34,7 +34,7 @@ program does not require URL sanitation (although your shell might):
 (demo_env) python src/main.py https://www.youtube.com/watch?v=NgE5mEQiizQ
 ```
 
-**Command line arguments**
+**Command Line Arguments**  
 Use `src/main.py --help` for parameter options. You can also, after starting the 
 wizard -instead of providing a URL- pass `params` to print a list of the current
 state of all parameters for inspection.
