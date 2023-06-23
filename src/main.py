@@ -1,7 +1,7 @@
 import sys
 
 sys.path.append('src')
-from initialize import log_dir
+from initialize import log_dir, default_market
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
     get_path_components, track_exists, sanitize_track_name, strip_url, flatten
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
@@ -67,7 +67,7 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
     :type duration_tolerance: float
 
     :param market: A two-letter Spotify market code for the market to search in.
-        Default is 'NL'.
+        Default is set upon initialization.
     :type market: str
 
     :param default_response: If provided, this will be used to select a search
@@ -406,7 +406,7 @@ def main(**kwargs):
               help="When verbose, to continue after 1 item.")
 @click.option("-t", "--tolerance", default=0.10,
               help="Duration difference threshold.")
-@click.option("-m", "--market", default="NL",
+@click.option("-m", "--market", default=default_market,
               help="Spotify API market.")
 @click.option("-l", "--search_limit", default=5,
               help="Tracks to check for match.")

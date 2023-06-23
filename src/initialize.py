@@ -61,6 +61,34 @@ def pth_validator(ans: str) -> bool:
     return Path(ans).parent.is_dir()
 
 
+def market_validator(market: str ) -> bool:
+    """
+    Check if a market is a valid Spotify market
+
+    :param market: The market to check
+    :type market: str
+    :return: True if market is valid, False otherwise
+    :rtype: bool
+    """
+    l = ["AD", "AE", "AG", "AL", "AM", "AO", "AR", "AT", "AU", "AZ", "BA", "BB",
+         "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BN", "BO", "BR", "BS", "BT",
+         "BW", "BY", "BZ", "CA", "CD", "CG", "CH", "CI", "CL", "CM", "CO", "CR",
+         "CV", "CW", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE",
+         "EG", "ES", "ET", "FI", "FJ", "FM", "FR", "GA", "GB", "GD", "GE", "GH",
+         "GM", "GN", "GQ", "GR", "GT", "GW", "GY", "HK", "HN", "HR", "HT", "HU",
+         "ID", "IE", "IL", "IN", "IQ", "IS", "IT", "JM", "JO", "JP", "KE", "KG",
+         "KH", "KI", "KM", "KN", "KR", "KW", "KZ", "LA", "LB", "LC", "LI", "LK",
+         "LR", "LS", "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MG", "MH",
+         "MK", "ML", "MN", "MO", "MR", "MT", "MU", "MV", "MW", "MX", "MY", "MZ",
+         "NA", "NE", "NG", "NI", "NL", "NO", "NP", "NR", "NZ", "OM", "PA", "PE",
+         "PG", "PH", "PK", "PL", "PS", "PT", "PW", "PY", "QA", "RO", "RS", "RW",
+         "SA", "SB", "SC", "SE", "SG", "SI", "SK", "SL", "SM", "SN", "SR", "ST",
+         "SV", "SZ", "TD", "TG", "TH", "TJ", "TL", "TN", "TO", "TR", "TT", "TV",
+         "TW", "TZ", "UA", "UG", "US", "UY", "UZ", "VC", "VE", "VN", "VU", "WS",
+         "XK", "ZA", "ZM", "ZW"]
+    return market in l
+
+
 def run_setup_wizard():
     """
     Runs the setup wizard for Web2MP3 and stores user input in a ".env" file.
@@ -79,6 +107,7 @@ def run_setup_wizard():
 
     web2mp3home = Path.cwd()
     music_dir_default = web2mp3home / "Music"
+    market_default =  "US"
 
     qs = {
         'HOME_DIR':                ('Web2MP3 home directory',
@@ -91,6 +120,8 @@ def run_setup_wizard():
                                     sfy_validator,  None),
         'SPOTIPY_CLIENT_SECRET':   ('Spotify client secret',
                                     sfy_validator,  None),
+        'SPOTIFY_MARKET':          ('Spotify market',
+                                    market_validator,  market_default)
     }
     print("                         , - ~ ~ ~ - ,                           \n"
           "                     , '   WEB 2 MP3   ' ,                       \n"
@@ -132,7 +163,8 @@ if not dotenv.find_dotenv(ENV_PATH):
 dotenv.load_dotenv(ENV_PATH)
 
 # Check if setup file is complete, if not, resume setup
-env_keys = 'HOME_DIR', 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', 'SPOTIPY_CLIENT_SECRET'
+env_keys = 'HOME_DIR', 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID',\
+    'SPOTIPY_CLIENT_SECRET', 'SPOTIFY_MARKET'
 env_vals = [os.environ.get(v) for v in env_keys]
 if None in env_vals:
     print("Incomplete environment file found. Resuming setup.")
@@ -142,6 +174,7 @@ dotenv.load_dotenv(ENV_PATH)
 # Define paths from config env
 home_dir = Path(os.environ.get('HOME_DIR'))
 music_dir = Path(os.environ.get('MUSIC_DIR'))
+default_market = os.environ.get('SPOTIFY_MARKET')
 daemon_dir = str(home_dir / '.daemons' / 'daemon-{}.tmp')
 log_dir = str(home_dir / '.logs' / '{}.json')
 song_db_file = str(home_dir / '{}song_db.pqt')

@@ -39,7 +39,7 @@ def uri2url(uri: str) -> str:
     return f'https://www.youtube.com/watch?v={uri.split(":")[-1]}'
 
 
-def get_description(track_url: str, logger=print, market=None) -> str:
+def get_description(track_url: str, logger=print, market:str) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
 

@@ -1,4 +1,4 @@
-from initialize import spotify_api
+from initialize import spotify_api, default_market
 from utils import timeout_handler
 from tag_manager import get_track_tags
 import pandas as pd
@@ -61,7 +61,7 @@ def get_search_platform():
     return youtube
 
 
-def get_description(track_url: str, logger, market='NL') -> pd.Series:
+def get_description(track_url: str, logger, market: str) -> pd.Series:
     # Gets information about the track that will be used as query for matching
     item = timeout_handler(spotify_api.track, track_url, market=market)
     track_tags = get_track_tags(item, do_light=False)

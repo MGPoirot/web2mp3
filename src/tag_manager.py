@@ -77,7 +77,7 @@ def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
     return tag_series
 
 
-def manual_track_tags(market='NL', duration=None, print_space=24) -> pd.Series:
+def manual_track_tags(market, duration=None, print_space=24) -> pd.Series:
     tag_dict = {
         'album': input('>>> Album name?'.ljust(print_space)) or None,
         'album_artist': input('>>> Artist name?'.ljust(print_space)),
