@@ -5,6 +5,7 @@ from datetime import datetime
 import eyed3
 import requests
 import shutil
+
 eyed3.log.setLevel("ERROR")
 
 
@@ -132,7 +133,6 @@ def set_file_tags(mp3_tags: pd.Series, file_name: str, audio_source_url=None,
     # the parquet file format.
     mp3_tags.track_num = (mp3_tags.track_num, mp3_tags.pop('track_max'))
     mp3_tags.disc_num = (mp3_tags.disc_num, mp3_tags.pop('disc_max'))
-
     # Load the audio file
     audiofile = eyed3.load(file_name)
 
@@ -144,6 +144,8 @@ def set_file_tags(mp3_tags: pd.Series, file_name: str, audio_source_url=None,
     if audio_source_url is not None:
         audiofile.tag.audio_source_url = audio_source_url
         internet_radio_url = mp3_tags['internet_radio_url']
+        # TODO: why is the internet_radio_url not set when the audio_source_url
+        #  is None?
         audiofile.tag.comments.set(
             f'Audio Source: "{audio_source_url},'
             f'Meta Data Source: "{internet_radio_url}",'
@@ -168,3 +170,26 @@ def download_cover_img(cover_img_path: str, cover_img_url: str, logger=print,
                                     f'{cover_img_path}"')
     else:
         raise ConnectionError('Album cover image could not be retrieved.')
+
+
+def get_file_tags(file_name=None, tags=None) -> pd.Series:
+    if tags is None:
+        tags = eyed3.load(file_name).tag
+
+    attributes = (
+        'album', 'album_artist', 'artist', 'bpm', 'duration',
+        'internet_radio_url', 'genre', 'recording_date',
+        'release_date', 'tagging_date', 'title',
+    )
+
+    def _get_attr(attr):
+        try:
+            return tags.__getattribute__(attr)
+        except AttributeError:
+            return None
+    mp3_tags = pd.Series({a: _get_attr(a) for a in attributes})
+    mp3_tags['disc_num'] = tags.disc_num.count
+    mp3_tags['disc_max'] = tags.disc_num.total
+    mp3_tags['track_num'] = tags.track_num.count
+    mp3_tags['track_max'] = tags.track_num.total
+    return mp3_tags

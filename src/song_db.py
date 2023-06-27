@@ -63,11 +63,6 @@ def get_song_db() -> pd.DataFrame:
         sdb.to_parquet(tmp_path)
     elif time() - os.stat(sdb_path).st_mtime > 60:
         sdb.to_parquet(tmp_path)
-
-    if not sdb['_kwarg_print_space'].dtype == pd.Int64Dtype():
-        print('a thief! ruined the dtype')
-        breakpoint()
-
     return sdb
 
 
