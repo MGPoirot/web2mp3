@@ -24,10 +24,15 @@ def hms2s(hhmmss: str) -> int:
         :return: The time in seconds.
         :rtype: int
     """
-    components = hhmmss.split(':')
-    components.reverse()
-    return sum([int(value) * multiplier for value, multiplier in
-                zip(components, (1, 60, 3600))])
+    if isinstance(hhmmss, int):
+        return hhmmss
+    elif isinstance(hhmmss, str):
+        components = hhmmss.split(':')
+        components.reverse()
+        return sum([int(value) * multiplier for value, multiplier in
+                    zip(components, (1, 60, 3600))])
+    else:
+        raise NotImplementedError
 
 
 def get_url_platform(track_url: str, logger: object = print):
