@@ -15,6 +15,8 @@ playlist_identifier = '/playlist?'
 album_identifier = ' '  # YouTube does not have album object types
 
 playlist_handler = pytube.Playlist
+
+# For YouTube, there is no such things as albums
 album_handler = lambda album_url: _
 
 

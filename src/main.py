@@ -106,7 +106,8 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
         if hasattr(query, 'video_title'):  # For manual retries
             search_query = query.video_title
         else:
-            search_query = f'{name} - {artist}'
+            # Uses the Spotify API for formatting
+            search_query = f'track:{name} artist:{artist}'
     else:
         raise ValueError(f'Unknown platform "{platform}"')
 
