@@ -1,4 +1,4 @@
-from initialize import spotify_api, default_market
+from initialize import spotify_api
 from utils import timeout_handler
 from tag_manager import get_track_tags
 import pandas as pd
@@ -99,6 +99,4 @@ def search(search_query, **kwargs):
 def t_extractor(*items, query_duration=1) -> list:
     # Returns duration of a track from a list of tracks as float
     res = [i['duration_ms'] / 1000 / query_duration for i in items]
-    if len(res) == 1:
-        res = res[0]
     return res

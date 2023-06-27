@@ -1,5 +1,4 @@
 import sys
-
 sys.path.append('src')
 from initialize import log_dir, default_market
 from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
@@ -116,11 +115,19 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
     logger(f'Searching {platform.name} for:'.ljust(ps), f'"{qstr}"')
     items = platform.search(search_query, **kwargs)
 
+    # TODO: control this unexpected behaviour
+    if not any(items):
+        logger(f'No results found for {accept_origin} search.')
+        return False
+
     # Sort the item list by relative durations
     rel_ts = platform.t_extractor(*items, query_duration=query.duration)
     sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
         rel_ts))))
     items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
+
+    # Sort the items, in case we need to get them by index
+    items = [item for item, _ in items_and_durations]
 
     # Check if one of our search results matches our query
     for n, (item, rel_t) in enumerate(items_and_durations, 1):
@@ -150,7 +157,7 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
             if platform.name == 'spotify':
                 matched_obj = get_track_tags(item, do_light=False)
             else:
-                item_duration = platform.t_extractor(item)
+                item_duration = platform.t_extractor(item)[0]
                 matched_obj = pd.Series({'track_url': item['link'],
                                          'video_title': item_desc,
                                          'duration': item_duration})
@@ -173,8 +180,8 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
         # Take action according to user input
         if proceed.isdigit():
             idx = int(proceed) - 1
-            if idx > len(items):
-                logger(f'Invalid index {idx} for {len(items)} options.')
+            if idx > len(items) or idx < 0:
+                logger(f'Invalid index {idx + 1} for {len(items)} options.')
             else:
                 selected_item = items[idx]
 
@@ -219,7 +226,7 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
             logger(f'Invalid input "{proceed}"')
 
     # Give it another try with our updated arguments
-    if matched_obj is None:
+    if matched_obj is None and default_response is None:
         matched_obj = lookup(
             query=query,
             platform=platform,
