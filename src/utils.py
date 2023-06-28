@@ -24,7 +24,9 @@ def hms2s(hhmmss: str) -> int:
         :return: The time in seconds.
         :rtype: int
     """
-    if isinstance(hhmmss, int):
+    if hhmmss is None:
+        return None
+    elif isinstance(hhmmss, int):
         return hhmmss
     elif isinstance(hhmmss, str):
         components = hhmmss.split(':')
@@ -33,6 +35,7 @@ def hms2s(hhmmss: str) -> int:
                     zip(components, (1, 60, 3600))])
     else:
         raise NotImplementedError
+
 
 
 def get_url_platform(track_url: str, logger: object = print):

@@ -43,8 +43,8 @@ def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
         and rip(artist_name) in rip(title)
 
 
-def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
-        pd.Series:
+def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
+           **kwargs) -> pd.Series:
     """
     Search for a track on a specified platform and return the best match.
 
@@ -116,22 +116,22 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
     logger(f'Searching {platform.name} for:'.ljust(ps), f'"{qstr}"')
     items = platform.search(search_query, **kwargs)
 
-    # TODO: control this unexpected behaviour
-    if not any(items):
-        logger(f'No results found for {accept_origin} search.')
-        return False
+
 
     # Sort the item list by relative durations
     rel_ts = platform.t_extractor(*items, query_duration=query.duration)
-    sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
-        rel_ts))))
-    items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
-
-    # Sort the items, in case we need to get them by index
-    items = [item for item, _ in items_and_durations]
+    if sort_by == 'duration' and None not in rel_ts:
+        sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
+            rel_ts))))
+        items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
+        # Sort the items, in case we need to get them by index
+        items, rel_ts = zip(*items_and_durations)
 
     # Check if one of our search results matches our query
-    for n, (item, rel_t) in enumerate(items_and_durations, 1):
+    if not any(items):
+        logger(f'No results found for {accept_origin} search.')
+        default_response = None
+    for n, (item, rel_t) in enumerate(zip(items, rel_ts), 1):
         # Extract information from our query results
         if platform.name == 'spotify':
             item_tags = get_track_tags(item, do_light=True)
@@ -146,7 +146,8 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
             break
 
         # Print a synopsis of our search result
-        logger(''.rjust(ps), f'{n}) {item_desc[:47].ljust(47)} {rel_t:.0%}')
+        rel_t_str = f'{str(rel_t)}%' if rel_t is None else f'{rel_t:.0%}'
+        logger(''.rjust(ps), f'{n}) {item_desc[:47].ljust(47)} {rel_t_str}')
 
         # Check how the duration matches up with what we are looking for
         is_duration_match = abs(rel_t - 1) < duration_tolerance
@@ -164,21 +165,28 @@ def lookup(query: pd.Series, platform, logger=print, **kwargs) -> \
                                          'duration': item_duration})
             break
 
+
     # Without clear match provide the user with options:
     if matched_obj is None:
-        logger(f'No clear {platform.name} match. Select:')
-        if default_response is None:
-            item_options = '/'.join(
-                [str(i + 1) if i else f'[{i + 1}]' for i in range(len(items))]
-            )  # returns [1]/2/3/4/5 depending on the number of found items
-            default = '1' if any(items) else 'Retry'
-            proceed = input(
-                f'>>> {item_options}/Retry/Manual/Abort/Change market: '
-            ) or default
-        else:
+        no_match_status = f'No clear {platform.name} match. ' + '{}:'
+        # Set appropriate response
+        if default_response is not None:
             proceed = default_response
+            print(no_match_status.format(f'Default to "{proceed}".'))
+        else:
+            print(no_match_status.format('Select:'))
+            if default_response is None:
+                if any(items):
+                    item_options = '/'.join([str(i + 1)
+                                             for i in range(len(items))]) + '/'
+                    default = '1'
+                else:
+                    default = 'Retry'
+                prompt = f'>>> {item_options}Retry/Manual/Abort/Change market:'
+                prompt.replace(default, f'[{default}]')
+                proceed = input(prompt) or default
 
-        # Take action according to user input
+        # Take action according to proceed method
         if proceed.isdigit():
             idx = int(proceed) - 1
             if idx > len(items) or idx < 0:
