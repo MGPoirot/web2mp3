@@ -9,3 +9,4 @@ __*/
 !requirements.txt
 !.gitignore
 *_cookies.txt
+src/local

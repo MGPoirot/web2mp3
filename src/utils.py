@@ -317,7 +317,7 @@ def rm_char(text: str) -> str:
     :return: output string cleaned of illegal characters
     :rtype: str
     """
-    for char in '.#%&{}\<>*?/$!":@|`|=\'':
+    for char in '~.#%&{}[]\<>*?/$!":@|`|=\'':
         text = text.replace(char, '')
     return text.strip()
 
@@ -396,8 +396,16 @@ def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
 def get_path_components(mp3_tags: pd.Series) -> list:
     # Returns the path valid components required to create the file path for
     # storing from a mp3 tags pandas series
-    return [rm_char(f) for f in
-            (mp3_tags.album_artist, mp3_tags.album, mp3_tags.title)]
+    path_components = [rm_char(f) for f in (
+        mp3_tags.album_artist,
+        mp3_tags.album,
+        mp3_tags.title
+    )]
+
+    # I would like to dedicate this line the XXXTENTACION,
+    # who came up with an album called '?'.
+    path_components = [c if any(c) else 'ILLEGAL_CHARACTERS_ONLY' for c in path_components]
+    return path_components
 
 
 def strip_url(url: str) -> str:
