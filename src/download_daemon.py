@@ -259,7 +259,6 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
         all_daemon_files = range(len(glob(daemon_dir.format('*'))))
         daemons = [i for i in all_daemon_files if
                    os.path.isfile(daemon_dir.format(i))]
-        breakpoint()
         daemon_n = daemons[-1] + 1
 
     # Initiate the DAEMON

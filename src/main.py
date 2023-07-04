@@ -106,8 +106,10 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
         if hasattr(query, 'video_title'):  # For manual retries
             search_query = query.video_title
         else:
-            # Uses the Spotify API for formatting
-            search_query = f'track:{name} artist:{artist}'
+            # # Uses the Spotify API for formatting,
+            # # I have not found this to be beneficial
+            # search_query = f'track:{name} artist:{artist}'
+            search_query = f'{name} {artist}'
     else:
         raise ValueError(f'Unknown platform "{platform}"')
 
@@ -150,7 +152,8 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
         logger(''.rjust(ps), f'{n}) {item_desc[:47].ljust(47)} {rel_t_str}')
 
         # Check how the duration matches up with what we are looking for
-        is_duration_match = abs(rel_t - 1) < duration_tolerance
+        is_duration_match = None if rel_t is None else \
+                abs(rel_t - 1) < duration_tolerance
 
         # Check if the search result is a match
         if is_clear_match(name, artist, title) and is_duration_match:
@@ -172,9 +175,9 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
         # Set appropriate response
         if default_response is not None:
             proceed = default_response
-            print(no_match_status.format(f'Default to "{proceed}".'))
+            logger(no_match_status.format(f'Default to {proceed}'))
         else:
-            print(no_match_status.format('Select:'))
+            logger(no_match_status.format('Select'))
             if default_response is None:
                 if any(items):
                     item_options = '/'.join([str(i + 1)
@@ -442,9 +445,3 @@ def click_processor(**kwargs):
 
 if __name__ == '__main__':
     click_processor()
-
-# os.system(f'sudo su plex -s /bin/bash')
-# We will want to use the API for scanning:
-# http://192.168.2.1:32400/library/sections/6/refresh?path=/srv/dev-disk-by-uuid-1806e0be-96d7-481c-afaa-90a97aca9f92/Plex/Music/Lazzo&X-Plex-Token=QV1zb_72YxRgL3Vv4_Ry
-# print('you might want to run...')
-# print(f"'/usr/lib/plexmediaserver/Plex\ Media\ Scanner --analyze -d '{root}'")

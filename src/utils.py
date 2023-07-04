@@ -10,6 +10,7 @@ import re
 from glob import iglob
 from time import sleep
 from importlib import import_module
+from json.decoder import JSONDecodeError
 
 
 def hms2s(hhmmss: str) -> int:
@@ -199,7 +200,8 @@ class Logger:
 
 
 def free_folder(directory: str, owner='pi', logger: object = print):
-    # As long as you do not run the command as sudo, you should not end up with ownership issues
+    # As long as you do not run the command as sudo,
+    # you should not end up with ownership issues
     """ Clear any access restrictions and set owner """
     os.system(f"sudo chmod 777 -R '{directory}'")
     os.system(f"sudo chown -R {owner}:{owner} '{directory}'")
@@ -239,56 +241,81 @@ def input_is(control: str, input_str: str) -> bool:
         0]
 
 
-def json_in(source: str):
-    """
-    Read data from a JSON file and return a dictionary object
+def in_wrapper(module):
+    name = module.__name__
 
-    :param source: The path to the JSON file
-    :type source: str
-    :return: A dictionary object representing the JSON data
-    :rtype: dict
-    """
-    with open(source, 'r') as file:
-        return json.load(file)
+    def in_method(source_path: str):
+        """
+        Read data from a JSON file and return a dictionary object
+    
+        :param source_path: The path to the JSON file
+        :type source_path: str
+        :return: A dictionary object representing the JSON data
+        :rtype: dict
+        """
+
+        def read(mode=''):
+            with open(source_path, f'r{mode}') as file:
+                return module.load(file)
+        try:
+            try:
+                return read()
+            except TypeError:
+                return read(mode='b')
+        except JSONDecodeError as e:
+            print(f'Warning: Issues with loading {name} file "{source_path}".')
+            with open(source_path, f'r') as file:
+                content = file.read()
+            if e.msg == 'Extra data':
+                print(f'Warning: Extra data found in the {name} file. ')
+                # Split raw data
+                junk = '{'.join(content.split('{')[:-1])
+                junk = junk[:junk.rfind(',')]
+                rest = '{' + content.split('{')[-1]
+                # Load
+                junk_json = json.loads(junk)
+                rest_json = json.loads(rest)
+                # Save new files
+                new_junk_file = unique_fname(source_path)
+                json_out(junk_json, new_junk_file)
+                print(f'New file created: "{new_junk_file}"')
+                json_out(rest_json, source_path)
+                print(f'Data recovered and saved to: "{source_path}"')
+                return rest_json
+            else:
+                print('Error: Recovery failed. No solution to the following '
+                      'data issue has been implemented:')
+                print(e)
+        except FileNotFoundError:
+            print("Error: File not found.")
+    return in_method
 
 
-def json_out(obj: dict, target: str):
-    """
-    Write dictionary object to a JSON file
+def out_wrapper(module, **kwargs):
 
-    :param obj: The dictionary object to be written
-    :type obj: dict
-    :param target: The path to the output JSON file
-    :type target: str
-    """
-    with open(target, 'w') as file:
-        json.dump(obj, file, indent=4, sort_keys=True)
+    def out_method(obj: dict, target_path: str):
+        """
+        Write dictionary object to a JSON file
 
-
-def pickle_in(source: str) -> dict:
-    """
-    Read data from a pickle file and return a dictionary object
-
-    :param source: The path to the pickle file
-    :type source: str
-    :return: A dictionary object representing the pickle data
-    :rtype: dict
-    """
-    with open(source, 'rb') as file:
-        return pickle.load(file)
+        :param obj: The dictionary object to be written
+        :type obj: dict
+        :param target: The path to the output JSON file
+        :type target: str
+        """
+        def write(mode=''):
+            with open(target_path, f'w{mode}') as file:
+                module.dump(obj, file, **kwargs)
+        try:
+            write()
+        except TypeError as e:
+            write(mode='b')
+    return out_method
 
 
-def pickle_out(obj: dict, target: str):
-    """
-    Write dictionary object to a pickle file
-
-    :param obj: The dictionary object to be written
-    :type obj: dict
-    :param target: The path to the output pickle file
-    :type target: str
-    """
-    with open(target, 'wb') as file:
-        pickle.dump(obj, file)
+json_in = in_wrapper(json)
+json_out = out_wrapper(json, indent=4, sort_keys=True)
+pickle_in = in_wrapper(pickle)
+pickle_out = out_wrapper(pickle)
 
 
 def flatten(lst: list) -> list:
@@ -444,4 +471,25 @@ def timeout_handler(func, *args, **kwargs):
             else:
                 sleep(1)
 
+
+def unique_fname(file_path):
+    fpath = str(file_path)
+
+    if not os.path.isfile(fpath):
+        return fpath
+
+    directory = os.path.dirname(fpath)
+    filename, extension = os.path.splitext(os.path.basename(fpath))
+    new_filename = filename
+    i = 2
+
+    while os.path.exists(os.path.join(directory, new_filename + extension)):
+        new_filename = f"{filename} ({i})"
+        i += 1
+
+    full_str = os.path.join(directory, new_filename + extension)
+
+    # Convert back to input instance type:
+    new_file_path = file_path.__class__(full_str)
+    return new_file_path
 

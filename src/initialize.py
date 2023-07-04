@@ -156,7 +156,7 @@ def run_setup_wizard():
 home_dir = Path(__file__).parents[1]
 
 # Check if Web2MP3 has been set up.
-ENV_PATH = Path('.config', '.env')
+ENV_PATH = Path(home_dir, '.config', '.env')
 if not dotenv.find_dotenv(ENV_PATH):
     print("No environment file found. Initiating setup wizard.")
     run_setup_wizard()
