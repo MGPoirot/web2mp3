@@ -74,7 +74,7 @@ Web2mp3 aims to be a scalable tool. To this end, three features are paramount:
 3) Minimal user input
 4) Concise managing of downloads
 
-**1. Input Sources **
+**1. Input Sources**
 
 Both YouTube URLs as Spotify URLs are accepted. My advise is to primarily use 
 Spotify URLs, since YouTube URLs can include video clip chatter. SoundCloud 
@@ -83,7 +83,7 @@ support is in development, to cover audio that is not available through YouTube.
 Both single songs as collections are accepted such as YouTube playlists, Spotify
 Playlists and Spotify Albums.
 
-**2. Reliable matching **
+**2. Reliable matching**
 
 Web2mp3 uses two ways to match audio and meta data. First it looks both if the
 artist and track name overlap. Second it checks if the durations of the items 
