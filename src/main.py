@@ -248,17 +248,90 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
     return matched_obj
 
 
+def file_from_tags_exists(track_tags, logger=print, avoid_duplicates=True):
+    if avoid_duplicates and track_tags is not None:
+        artist_p, _, track_p = get_path_components(track_tags)
+        if any(track_exists(artist_p, track_p, logger=logger)):
+            return True
+    return False
+
+
+def do_match(track_url, source, logger=print, **kwargs):
+    """
+        The do_match function handles the heavy lifting of the matching process,
+        it is wrapped by match_audio_with_tags to enable harmonized handling of
+        errors and setting of the song_db.
+    """
+    # Get the arguments
+    market = kwargs['market']
+    do_overwrite = kwargs['do_overwrite']
+    avoid_duplicates = kwargs['avoid_duplicates']
+    track_uri = source.url2uri(track_url)
+
+    # Skip in case the URL is already in the database
+    if track_uri in get_song_db().index and not do_overwrite:
+        return 'Skipped: TrackExists "{track_uri}"'
+
+    # Get a description of the object to use for matching
+    query = source.get_description(track_url, logger, market)
+    if query is None:  # Failed to retrieve query
+        return f'Failed: Could not form {source.name.capitalize()} query'
+
+    # Skip if the path based on this file exists
+    _, track_tags = source.sort_lookup(query, None)
+    if file_from_tags_exists(track_tags, logger, avoid_duplicates):
+        return 'Skipped: FileExists'
+
+    # If the query contains this field it cannot be empty or zero.
+    req_fields = ['duration', 'title', 'album', 'artist']
+    if any([not bool(query[c]) for c in req_fields if c in query]):
+        set_song_db(track_uri)
+        return f'Failed: URL object is empty "{track_uri}"'
+
+    # Match the object
+    search = source.get_search_platform()
+    match_obj = lookup(query=query,
+                       platform=search,
+                       logger=logger,
+                       **kwargs)
+
+    if match_obj is False:
+        return f'Failed: Could not match {source.name.capitalize()} to ' \
+               f'{search.name.capitalize()} item'
+
+    track_uri, track_tags = source.sort_lookup(query, match_obj)
+    tags_uri = get_tags_uri(track_tags)
+    source_uri = source.url2uri(track_url)  # 1 id may >1 urls
+
+    # 1) Check if the file, or a similar file does not exist already
+    if file_from_tags_exists(track_tags, logger, avoid_duplicates):
+        return 'Skipped: FileExists'
+
+    #  2) Check if the found tracks is already in the database
+    if not do_overwrite:
+        song_db_indices = get_song_db().index
+        ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
+        errs = [err for err, idx in ctrl if idx in song_db_indices]
+        if any(errs):
+            return ' '.join(['Skipped:', *[f'{e}Exists' for e in errs]])
+
+    # Define download settings
+    kwg_df = pd.Series({k: kwargs[k.replace('_kwarg_', '')]
+                        for k in song_db_template if k[:7] == '_kwarg_'})
+    download_info = pd.concat([track_tags, kwg_df])
+
+    # Set song database entries
+    set_song_db(track_uri, download_info, overwrite=True)
+    return f'Success: Download added "{track_uri}"', tags_uri, source_uri, track_uri
+
+
 def match_audio_with_tags(track_url: str, **kwargs):
     """
     This function matches a given URL, and writes what it found to the song
     database, after which it calls this function again, but as a background
     process, and finishes.
     """
-    # Get the arguments
     ps = kwargs['print_space']
-    market = kwargs['market']
-    do_overwrite = kwargs['do_overwrite']
-    avoid_duplicates = kwargs['avoid_duplicates']
 
     # Create a logger object for this URL
     logger_path = log_dir.format(shorten_url(track_url))
@@ -267,74 +340,22 @@ def match_audio_with_tags(track_url: str, **kwargs):
     # Get the source platform module and the platform we need to match it with
     source = get_url_platform(track_url)
     if source is None:  # matching failed
-        return
+        return f'UnknownPlatform "{track_url}"'
     else:
         logger(f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
-    search = source.get_search_platform()
 
-    # Skip in case the URL is already in the database
-    if source.url2uri(track_url) in get_song_db().index and not do_overwrite:
-        print(f'Skipped: {source.name} URI exists in Song Data Base.\n')
-        return
-
-    # Get a description of the object to use for matching
-    query = source.get_description(track_url, logger, market)
-    if query is None:  # Failed to retrieve query
-        logger(f'Failed: No {source.name} query for matching.\n')
-        return
-
-    # If the query contains this field it cannot be empty or zero.
-    req_fields = ['duration', 'title', 'album', 'artist']
-    if any([not bool(query[c]) for c in req_fields if c in query]):
-        logger(f'Skipped: URL refers to empty object.')
-        set_song_db(source.url2uri(track_url))
-        return
-
-    # Match the object
-    match_obj = lookup(query=query,
-                       platform=search,
-                       logger=logger,
-                       **kwargs)
-
-    if match_obj is False:
-        logger(f'Failed: No match between {source.name} and'
-               f' {source.get_search_platform().name} items\n')
-        return
-
-    track_uri, track_tags = source.sort_lookup(query, match_obj)
-    tags_uri = get_tags_uri(track_tags)
-    source_uri = source.url2uri(track_url)  # 1 id may >1 urls
-
-    # Check two things to know if we need to process the request:
-    errs = []
-
-    # 1) Check if the file, or a similar file does not exist already
-    if avoid_duplicates:
-        artist_p, _, track_p = get_path_components(track_tags)
-        if any(track_exists(artist_p, track_p, logger=logger)):
-            errs.append('FileExists')
-
-    #  2) Check if the found tracks is already in the database
-    if not do_overwrite:
-        song_db_indices = get_song_db().index
-        ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
-        errs.extend([err for err, idx in ctrl if idx in song_db_indices])
-
-    if any(errs):
-        set_song_db(track_uri, overwrite=False)
-        logger('Skipped:', *[f'{e}Exists' for e in errs])
+    search_result = do_match(track_url, source, logger, **kwargs)
+    if isinstance(search_result, tuple):
+        status, tags_uri, source_uri, track_uri = search_result
+        set_song_db(tags_uri, overwrite=False)
+        set_song_db(source_uri, overwrite=False)
     else:
-        # Define download settings
-        kwg_df = pd.Series({k: kwargs[k.replace('_kwarg_', '')]
-                            for k in song_db_template if k[:7] == '_kwarg_'})
-        download_info = pd.concat([track_tags, kwg_df])
+        status = search_result
+        track_uri = source.url2uri(track_url)
+    set_song_db(track_uri, overwrite=False)
 
-        # Set song database entries
-        set_song_db(track_uri, download_info, overwrite=True)
-        logger('Success: Download added\n')
-    set_song_db(tags_uri, overwrite=False)
-    set_song_db(source_uri, overwrite=False)
-    return
+    status = status.split(':')
+    logger(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
 
 
 def unpack_url(url: str) -> list:
