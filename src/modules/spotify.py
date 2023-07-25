@@ -3,6 +3,7 @@ from utils import timeout_handler
 from tag_manager import get_track_tags
 import pandas as pd
 from modules import youtube
+from spotipy.exceptions import SpotifyException
 
 name = 'spotify'
 target = 'tags'
@@ -24,7 +25,16 @@ def general_handler(url: str, method) -> list:
     :return:
     """
     uri = url2uri(url, raw=True)
-    results = timeout_handler(method, uri)['tracks']
+    try:
+        results = timeout_handler(method, uri)['tracks']
+    except SpotifyException as e:
+        mtd = method.__name__.capitalize()
+        if e.http_status == 404:
+            print(f'{mtd}NotFound: The object you are looking for is probably '
+                  f'private')
+        else:
+            print(f'Unknown Spotify Error in retrieving {mtd} items')
+        return []
     object_items = results['items']
     while results['next']:
         results = spotify_api.next(results)
@@ -50,7 +60,10 @@ def album_handler(url: str) -> list:
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
     # Sorts the mp3 URL and track tags
-    track_uri = youtube.url2uri(matched_obj.track_url)
+    if matched_obj is None:
+        track_uri = None
+    else:
+        track_uri = youtube.url2uri(matched_obj.track_url)
     track_tags = query
     return track_uri, track_tags
 
