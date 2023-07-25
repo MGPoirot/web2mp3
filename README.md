@@ -6,7 +6,7 @@ internet with proper mp3 tagging and directory structuring.
 
 **Python Wizard**
 
-Easiest is calling `python main.py` which will start the Wizard that will help 
+The easiest is calling `python main.py` which will start the Wizard that will help 
 you provide input:
 
 ```python
@@ -30,7 +30,7 @@ Success:                 Download added "youtube:N4bFqW_eu2I"
 Each call to the Wizard should take about a second, since downloading is 
 performed in the background using a daemon, and mp3 tags are applied.  
 
-Alternatively you can call the program straight from the command line. The
+Alternatively you can call Web2Mp3 straight from the command line. The
 program does not require URL sanitation (although your shell might):
 
 ```
@@ -38,7 +38,7 @@ program does not require URL sanitation (although your shell might):
 ```
 
 **Command Line Arguments**  
-Use `src/main.py --help` for parameter options. You can also, after starting the 
+Use `main.py --help` for parameter options. You can also, after starting the 
 wizard -instead of providing a URL- pass `params` to print a list of the current
 state of all parameters for inspection.
 
@@ -65,17 +65,62 @@ do_overwrite         False
 print_space          24
 max_time_outs        10
 ```
-**Suppored URLS**
+
+## Functionalities
+
+Web2mp3 aims to be a scalable tool. To this end, three features are paramount:
+1) A large range of input sources
+2) Reliable matching between audio and meta data
+3) Minimal user input
+4) Concise managing of downloads
+
+**1. Input Sources **
+
 Both YouTube URLs as Spotify URLs are accepted. My advise is to primarily use 
-Spotify URLs, since YouTube URLs can include video clip chatter.   
+Spotify URLs, since YouTube URLs can include video clip chatter. SoundCloud 
+support is in development, to cover audio that is not available through YouTube. 
 
 Both single songs as collections are accepted such as YouTube playlists, Spotify
 Playlists and Spotify Albums.
 
-URLs from YouTube and Spotify are supported. SoundCloud support is coming but 
-has no priority.
+**2. Reliable matching **
+
+Web2mp3 uses two ways to match audio and meta data. First it looks both if the
+artist and track name overlap. Second it checks if the durations of the items 
+are roughly equal. The acceptable range (as percentage difference) is the 
+duration tolerance (see `tolerance` in the CLI argument list). Duration is 
+of especial benefit to avoid downloading audio with video clip intro chatter.  
+
+**3. Minimal user input**
+
+In matching the audio the meta data, web2mp3 automatically compares several
+items and selects the most appropriate. When no appropriate match could be 
+found the user is requested for input. The options are:
+* `1-5` Select any item from the list
+* `Retry` Give the user an option to type a query to search for
+* `Manual` Manually input all meta data information
+* `Abort` Cancel download
+
+When running large batches of songs (e.g., a long playlist), it is best to set 
+the `--response` flag to either `Abort` or `1`. This way, downloads will be 
+added without interruption. If, after this run has completed, you do care about
+manually selecting matches that were not matched automatically, you can now 
+rerun the previous command and will only be prompted with tracks that could not
+be added during the first run.
+
+**4. Concise managing of downloads**
+
+To speed up the downloading process, Web2mp3 stores a download history in the
+Song Database (`song_db`). To avoid these checks, the `--do_overwrite` flag 
+can be passed.
+As a final check before downloading , Web2mp3 checks if the song to be 
+downloaded does not already exist in the music directory. It does this by
+checking if the artist already has a song downloaded containing this song name.
+It usually works fine, but in case you want to turn it off you can pass the
+`--avoid_duplicates` flag
 
 ## Get started in 60 Seconds
+
 https://user-images.githubusercontent.com/38399483/234430966-bc7fc4d3-1339-4e9a-97df-a430ecfc70ba.mp4
 Commands shown in the video are as follows:
 ```
@@ -106,80 +151,11 @@ Music
 
 Starts with `youtube_search_python` to identify the video with the given URL. Then uses `spotipy` to get meta data. After which it uses `yt-dlp` to download audio, and finally `eye3d` for handling mp3 tags. `pytube` is optional to get a list of URLS from a playlist. See `requirements.txt`. Tested on Linux and Windows.
 
-## Settings
-Default settings can be found in the in the `settings.txt` file. Here are options and considerations
-### 1. DAEMON settings
-In general DAEMONS are headless background processes. For this application,
-DAEMONs are used to perform the downloading of audio and cover images, and mp3
-meta-data tags.
-
-By performing these tasks in the background, the semi-supervised process of
-matching audio with meta-data is not interrupted.
-
-After each match, songs are stored in the song data base (SDB). DAEMONs will
-attempt to process any unprocessed song the the SDB and finish when there is
-nothing left. Since DAEMONs are headless by default, they store logbooks to the
-`.log` directory.
-
-* `init_daemons` When to initiate DAEMONs as string, not case sensitive. 
-  Options:
-    1. `'during'` or `'d'` (default)  
-  
-      DEAMONs will start downloading as soon as possible, which
-    is the fasted option.
-  
-    2. `'after'` or `'a'`  
-  
-      DAEMONS will start downloading after completing the matching process of
-    the track URL or playlist URL provided. This can be chosen if due to
-      limited computing power, multiprocessing might destabilize your machine.
-  
-    3. `else`  
-  
-      Do not automatically initiate DAEMONS. They can then be initiated
-      manually by running `python download_daemons.py`.
-      You might want to choose this for the same reason as 2) but you also
-    have multiple URLs, or if you want to manually want to run
-      download_daemons.py in verbose mode and do not want all tasks in the SDB
-      to be processed straight away.
-  
-* `max_daemons`: number of DAEMONS to spawn when download_daemons.py is called.
-    Default is `4`. A higher number is faster but requires more computational 
-  power.
-
-### 2. Verbose Mode
-Since DAEMONS are run in the background by default, you might not immediately
-notice errors until checking the logs, and even then see how fast single items
-are being processed. Therefor, there is the option to run in verbose mode:
-
-
-* `verbose` Whether to run in verbose mode. Options are:
-    1. `False` (default)   
-    Initiate DAEMONS in the background and store logs to .logs directory
-    2. `True`   
-    Initiate a single process and print the logging data to the console.
-
-* `verbose_single` Whether to only perform a single item when in verbose 
-  mode as Boolean
-  
-    1. `True` (default)   
-  
-      Only process a single item, then return. If your sole intent is to check 
-      if the downloading process succeeds or fails, this is your best 
-      option. Afterwards you can continue debugging or running downloads 
-      without verbose mode.
-    2. `False`     
-  
-      Keep processing items. If you like looking at every one of your 
-      downloads being processed this is your option. This might be usefull 
-      when downloads only break every so often and you do no not want to 
-      find out later in the logs.
-
-### 3. Matching Settings
+## main.py Command line arguments
 An important part of this tool is to match the audio to Spotify meta-data, or
 inversely, find the right audio to download to a Spotify track.
 
-* `default_tolerance` Accepted duration difference as float.
+* `tolerance` Accepted duration difference as float.
     The percentage difference that the Spotify meta-data and the audio can have
     to still be a match as float, default is `0.10` (10% difference)
     A higher percentage decreases the number of false negatives (missed correct
@@ -205,14 +181,13 @@ inversely, find the right audio to download to a Spotify track.
     1. `True` (default)   
     By default, we will look in our MUSIC_DIR to see if a track exists already
     using `utils.track_exists`. This avoids downloading the same track twice if
-     -for example- the same track has been released as single  on an album, so
+     -for example- the same track has been released as single on an album, so
      general checking if the file exists is not enough.
     2. `False`   
     The drawback of avoiding duplicates is that -for example- Live versions
     might be skipped if a studio recording of the same track is already in the
     MUSIC_DIR.
 
-### 4. Other
 * `print_space` The number of whitespaces used when logging as integer
     This is purely cosmetic to the matching process. Default is `24`. A higher
     number might render the matching process as more clear, but only if your
@@ -230,6 +205,57 @@ inversely, find the right audio to download to a Spotify track.
     increasing file size. Default is `320` kB/s. Common values are 64 (very low
     quality), 128 (low quality), 192 (medium quality), 256 (high quality) and
     320 (very high quality).
+
+### download_daemon.py command line arguments
+In general DAEMONS are headless background processes. For this application,
+DAEMONs are used to perform the downloading of audio and cover images, and mp3
+meta-data tags.
+
+By performing these tasks in the background, the semi-supervised process of
+matching audio with meta-data is not interrupted.
+
+After each match, songs are stored in the song data base (SDB). DAEMONs will
+attempt to process any unprocessed song the the SDB and finish when there is
+nothing left. Since DAEMONs are headless by default, they store logbooks to the
+`.log` directory.
+
+* `init_daemons` When to initiate DAEMONs as string, not case sensitive. Options:
+  1. `'during'` or `'d'` (default)  
+         DAEMONs will start downloading as soon as possible, which  is the fasted option.
+  2. `'after'` or `'a'`  
+     DAEMONS will start downloading after completing the matching process of
+     the track URL or playlist URL provided. This can be chosen if due to
+     limited computing power, multiprocessing might destabilize your machine.
+
+DAEMONs can then be initiated manually by running `python download_daemons.py`.
+You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run download_daemons.py in verbose mode and do not want all tasks in the SDB
+to be processed straight away.
+
+* `max_daemons`: number of DAEMONS to spawn when download_daemons.py is called.
+Default is `4`. A higher number is faster but requires more computational power.
+
+**Verbose Mode**
+Since DAEMONS are run in the background by default, you might not immediately
+notice errors until checking the logs, and even then see how fast single items
+are being processed. Therefor, there is the option to run in verbose mode:
+
+
+* `verbose` Whether to run in verbose mode. Options are:
+    1. `False` (default)   
+    Initiate DAEMONS in the background and store logs to .logs directory
+    2. `True`   
+    Initiate a single process and print the logging data to the console.
+
+* `verbose_single` Whether to only perform a single item when in verbose 
+  mode as Boolean
+      1. `True` (default) 
+         Only process a single item, then return. If your sole intent is to check 
+         if the downloading process succeeds or fails, this is your best 
+         option. Afterwards you can continue debugging or running downloads 
+         without verbose mode.
+      2. `False`
+         Keep processing items. If you like looking at every one of your 
+         downloads being processed this is your option. This might be useful when downloads only break every so often and you do no not want to find out later in the logs.
 
 
 ## Downloading Age restricted content
