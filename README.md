@@ -1,26 +1,28 @@
 <img align="right" width="200" height="200" src="res/logo.svg"></img>
 # Web2mp3 - Music Download CLI
-A fully automatic scalable command line interface to download music from the internet with proper mp3 tagging and directory structuring.
+A fully automatic scalable command line interface to download music from the 
+internet with proper mp3 tagging and directory structuring.
 ## How to use
 
 **Python Wizard**
 
-Easiest is calling `python src/main.py` which will start the Wizard that will 
-help you provide input:
+Easiest is calling `python main.py` which will start the Wizard that will help 
+you provide input:
 
 ```python
 >>> URL or [Abort]?      https://www.youtube.com/watch?v=NgE5mEQiizQ
-Searching Spotify for    Dirty South Hip Hop - Royalty Free Music - Topic
+Searching Spotify for:  "Dirty South Hip Hop - Royalty Free Music - Topic"
                          1) Dirty South Hip Hop - Royalty Free Music        100%
                          
-Clear Spotify match      Dirty South Hip Hop - Royalty Free Music Instrumenta...
-Success: Song DB entry created.
+Clear Spotify match:     Dirty South Hip Hop - Royalty Free Music Instrumenta...
+Success:                 Download added "youtube:NgE5mEQiizQ"
 
 >>> URL or [Abort]?      https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
-Searching YouTube for    Dirty South Hip Hop - Royalty Free Music Instrumental
+New spotify URL:         open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
+Searching Youtube for:   "Dirty South Hip Hop - Royalty Free Music Instrumental"
                          1) Dirty South Hip Hop - Royalty Free Music 	    100%
-Clear YouTube match      Dirty South Hip Hop - Royalty Free Music
-Success: Song DB entry created.
+Clear YouTube match:     Dirty South Hip Hop - Royalty Free Music
+Success:                 Download added "youtube:NgE5mEQiizQ"
 
 >>> URL or [Abort]?      
 ```
@@ -31,7 +33,7 @@ Alternatively you can call the program straight from the command line. The
 program does not require URL sanitation (although your shell might):
 
 ```
-(demo_env) python src/main.py https://www.youtube.com/watch?v=NgE5mEQiizQ
+(demo_env) python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ
 ```
 
 **Command Line Arguments**  
