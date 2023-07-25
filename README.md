@@ -11,19 +11,20 @@ you provide input:
 
 ```python
 >>> URL or [Abort]?      https://www.youtube.com/watch?v=NgE5mEQiizQ
+2023-01-01 09:00
 Searching Spotify for:  "Dirty South Hip Hop - Royalty Free Music - Topic"
                          1) Dirty South Hip Hop - Royalty Free Music        100%
-                         
 Clear Spotify match:     Dirty South Hip Hop - Royalty Free Music Instrumenta...
 Success:                 Download added "youtube:NgE5mEQiizQ"
 
->>> URL or [Abort]?      https://open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
-New spotify URL:         open.spotify.com/track/0PCM1aBGD8kGJmBizoW2iM
-Searching Youtube for:   "Dirty South Hip Hop - Royalty Free Music Instrumental"
-                         1) Dirty South Hip Hop - Royalty Free Music 	    100%
-Clear YouTube match:     Dirty South Hip Hop - Royalty Free Music
-Success:                 Download added "youtube:NgE5mEQiizQ"
-
+>>> URL or [Abort]?     https://open.spotify.com/track/4mn2kNTqiGLwaUR8JdhJ1l                    
+2023-01-01 09:00
+New spotify URL:         open.spotify.com/track/4mn2kNTqiGLwaUR8JdhJ1l
+Searching Youtube for:   "House of the Rising Sun The Animals"
+                         1) The House of the Rising Sun                     99%
+                         2) The Animals - House Of The Rising Sun (Music Vi 97%
+Clear youtube match:     The Animals - House Of The Rising Sun (Music Video) [4K HD]
+Success:                 Download added "youtube:N4bFqW_eu2I"
 >>> URL or [Abort]?      
 ```
 Each call to the Wizard should take about a second, since downloading is 
