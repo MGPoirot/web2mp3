@@ -17,8 +17,7 @@ album_identifier = ' '  # YouTube does not have album object types
 playlist_handler = pytube.Playlist
 
 # For YouTube, there is no such things as albums
-album_handler = lambda album_url: _
-
+# album_handler = lambda album_url: _
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
     track_url = url2uri(query.track_url)
