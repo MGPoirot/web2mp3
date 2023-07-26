@@ -115,7 +115,7 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
 
     # Query the desired platform
     qstr = search_query if len(search_query) < 53 else search_query[:50] + '...'
-    logger(f'Searching {platform.name} for:'.ljust(ps), f'"{qstr}"')
+    logger(f'Searching {platform.name.capitalize()} for:'.ljust(ps), f'"{qstr}"')
     items = platform.search(search_query, **kwargs)
 
 
@@ -270,7 +270,7 @@ def do_match(track_url, source, logger=print, **kwargs):
 
     # Skip in case the URL is already in the database
     if track_uri in get_song_db().index and not do_overwrite:
-        return 'Skipped: TrackExists "{track_uri}"'
+        return f'Skipped: TrackExists "{track_uri}"'
 
     # Get a description of the object to use for matching
     query = source.get_description(track_url, logger, market)
