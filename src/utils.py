@@ -11,7 +11,7 @@ from glob import iglob
 from time import sleep
 from importlib import import_module
 from json.decoder import JSONDecodeError
-
+from collections.abc import Iterable
 
 def hms2s(hhmmss: str) -> int:
     """
@@ -151,6 +151,9 @@ class Logger:
     def __call__(self, *text, verbose=False):
         """
         Logs the given `text` with the name of the calling function.
+        The special thing about this logging function is that function output
+        will be sorted by the function that called it automatically in a dict
+        format.
 
         Args:
             :param text: The text to log.
@@ -166,6 +169,8 @@ class Logger:
 
         # See if this caller has recently logged anything
         log_dict = json_in(self.path)
+        if not isinstance(log_dict, Iterable):
+            log_dict = {'Unassigned': log_dict}
         existing_caller_ids = [k for k in log_dict if caller in k]
         if not any(existing_caller_ids):
             caller_id = f'{str(len(log_dict)).zfill(3)}-{caller}'
@@ -195,8 +200,10 @@ class Logger:
         Returns:
             :return: None
         """
-        if os.path.isfile(self.path):
+        try:
             os.remove(self.path)
+        except FileNotFoundError:
+            pass
 
 
 def free_folder(directory: str, owner='pi', logger: object = print):
@@ -347,6 +354,8 @@ def rm_char(text: str) -> str:
     :return: output string cleaned of illegal characters
     :rtype: str
     """
+    if text is None:
+        return 'NONE'
     for char in '~.#%&{}[]\<>*?/$!":@|`|=\'':
         text = text.replace(char, '')
     return text.strip()
