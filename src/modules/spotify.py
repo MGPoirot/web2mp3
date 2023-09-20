@@ -4,14 +4,29 @@ from tag_manager import get_track_tags
 import pandas as pd
 from modules import youtube
 from spotipy.exceptions import SpotifyException
+import requests
 
+
+# PSA: strictly define all substring patterns to avoid conflicts
+# the name of the module
 name = 'spotify'
+
+# what the tool can receive from the module
 target = 'tags'
 
-# Identifier substrings should be defined strictly enough that a URL from
-# this platform can never contain this substring without being of this type.
+# patterns to match in a URL
+url_patterns = ['open.spotify.com', 'spotify.link', 'spotify:', ]
+
+# substring to recognize a playlist object
 playlist_identifier = '/playlist/'
 album_identifier = '/album/'
+
+
+def url_unshortner(object_url: str) -> str:
+    if 'spotify.link' in object_url:
+        r = requests.head(object_url, allow_redirects=True)
+        object_url = r.url
+    return object_url
 
 
 def general_handler(url: str, method) -> list:

@@ -372,6 +372,7 @@ def unpack_url(url: str) -> list:
         print('Failed to unpack URL')
         return []
 
+    url = platform.url_unshortner(url)
     # Check if the URL is a reference to a batch of tracks
     if platform.playlist_identifier in url:
         urls = platform.playlist_handler(url)

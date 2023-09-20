@@ -7,7 +7,7 @@ from pandas import Int64Dtype as PdInt
 from pandas import BooleanDtype as PdBool
 from pandas import StringDtype as PdStr
 from pandas import Float32Dtype as PdFlt
-
+from time import time as now
 
 song_db_template = {
     'album': PdStr(),
@@ -35,6 +35,9 @@ song_db_template = {
     '_kwarg_verbose_continuous': PdBool(),
 }
 
+sdb_path = song_db_file.format('')
+tmp_path = song_db_file.format('.')
+
 
 def get_song_db() -> pd.DataFrame:
     """
@@ -44,9 +47,6 @@ def get_song_db() -> pd.DataFrame:
     URLs of past processes in order to avoid processing them twice.
     """
     # Load the song database is it exists
-    sdb_path = song_db_file.format('')
-    tmp_path = song_db_file.format('.')
-
     if not os.path.isfile(sdb_path):
         sdb = pd.DataFrame(columns=song_db_template).astype(song_db_template)
         sdb.to_parquet(sdb_path)
@@ -92,3 +92,31 @@ def set_song_db(uri: str, value=None, overwrite=True):
 def pop_song_db(uri: str):
     """ remove entry from song database"""
     get_song_db().drop(uri).to_parquet(song_db_file.format(''))
+
+
+if __name__ == '__main__':
+    try:
+        then = now()
+        sdb = get_song_db()
+        duration = now() - then
+
+        n_records = len(sdb)
+        records_to_do = sdb.title.notna().sum()
+        n_empty_records = n_records - records_to_do
+
+        backup_exists = os.path.isfile(tmp_path)
+        backup_exists = 'exists' if backup_exists else 'does not exist'
+        ps = 35
+
+        info = [
+            ('number of processed records', n_empty_records),
+            ('number of unprocessed records', records_to_do),
+            ('loading time', f'{duration:.3f}s'),
+            ('location', sdb_path),
+            ('backup', backup_exists)
+        ]
+        print('SONG DATA BASE INFORMATION:',
+              *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info])
+    except FileNotFoundError as e:
+        print('Failed to load the song data base')
+

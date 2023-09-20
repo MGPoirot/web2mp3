@@ -12,6 +12,8 @@ from time import sleep
 from importlib import import_module
 from json.decoder import JSONDecodeError
 from collections.abc import Iterable
+import modules
+from pathlib import Path
 
 def hms2s(hhmmss: str) -> int:
     """
@@ -36,7 +38,6 @@ def hms2s(hhmmss: str) -> int:
                     zip(components, (1, 60, 3600))])
     else:
         raise NotImplementedError
-
 
 
 def get_url_platform(track_url: str, logger: object = print):
@@ -69,14 +70,14 @@ def get_url_platform(track_url: str, logger: object = print):
         > get_url_platform('https://on.soundcloud.com/H4C3V')
         'soundcloud'
     """
-    patterns = {'open.spotify.com': 'spotify',
-                'youtube.com': 'youtube',
-                'soundcloud.com': 'soundcloud',
-                'youtu.be': 'youtube',
-                'youtube:': 'youtube',
-                'spotify:': 'spotify',
-                'soundcloud:': 'soundcloud', }
-    for pattern, domain in patterns.items():
+
+    url_patterns = {}
+    for module_path in Path(modules.__path__._path[0]).glob('*.py'):
+        module = __import__(f'{modules.__name__}.{module_path.stem}', fromlist=[])
+        url_patterns.update({p: module.name for p in module.url_patterns})
+
+
+    for pattern, domain in url_patterns.items():
         if pattern in track_url:
             # Identify the platform where the URL is from
             try:
@@ -85,7 +86,7 @@ def get_url_platform(track_url: str, logger: object = print):
                 return
             return module
     logger(f'No pattern found in "{track_url}". '
-           f'Known patterns: {"; ".join(patterns)}')
+           f'Known patterns: {"; ".join(url_patterns)}')
     return None
 
 
@@ -145,8 +146,15 @@ class Logger:
         self.verbose = verbose  # Always print if true
 
         if not os.path.isfile(self.path):
-            json_out({}, self.path)
+            self.id = 0
+            self.create_new()
+        else:
+            last_id = [k.split('-')[0] for k in json_in(self.path).keys()][0]
+            self.id = int(last_id) + 1
         self(datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+    def create_new(self):
+        json_out({}, self.path)
 
     def __call__(self, *text, verbose=False):
         """
@@ -170,10 +178,10 @@ class Logger:
         # See if this caller has recently logged anything
         log_dict = json_in(self.path)
         if not isinstance(log_dict, Iterable):
-            log_dict = {'Unassigned': log_dict}
+            log_dict = {'000-Unassigned': log_dict}
         existing_caller_ids = [k for k in log_dict if caller in k]
         if not any(existing_caller_ids):
-            caller_id = f'{str(len(log_dict)).zfill(3)}-{caller}'
+            caller_id = f'{self.id}{str(len(log_dict)).zfill(2)}-{caller}'
             log_dict[caller_id] = []
         else:
             caller_id = existing_caller_ids[-1]
@@ -275,20 +283,42 @@ def in_wrapper(module):
                 content = file.read()
             if e.msg == 'Extra data':
                 print(f'Warning: Extra data found in the {name} file. ')
+
                 # Split raw data
-                junk = '{'.join(content.split('{')[:-1])
-                junk = junk[:junk.rfind(',')]
-                rest = '{' + content.split('{')[-1]
-                # Load
-                junk_json = json.loads(junk)
-                rest_json = json.loads(rest)
+                start = content.find('{')
+                stop = -1
+                waiting = 0
+                for i, c in enumerate(content):
+                    if c == '{':
+                        waiting += 1
+                    elif c == '}':
+                        if waiting:
+                            waiting -= 1
+                        else:
+                            stop = i
+                stop = content.find('}') + 1
+                if start < 0 or stop < 0:
+                    junk = content
+                    recovered = {}
+                else:
+                    part = content[start:stop]
+                    try:
+                        recovered = json.loads(part)
+                        junk = content[stop:]
+                    except JSONDecodeError:
+                        junk = content
+                        recovered = {}
+                        pass
                 # Save new files
                 new_junk_file = unique_fname(source_path)
-                json_out(junk_json, new_junk_file)
-                print(f'New file created: "{new_junk_file}"')
-                json_out(rest_json, source_path)
-                print(f'Data recovered and saved to: "{source_path}"')
-                return rest_json
+                json_out(junk, new_junk_file)
+                print(f'Corrupted data stored to: "{new_junk_file}"')
+                json_out(recovered, source_path)
+                if recovered != {}:
+                    print(f'Data recovered and saved to: "{source_path}"')
+                else:
+                    print('No data was recovered, but operation can continue')
+                return recovered
             else:
                 print('Error: Recovery failed. No solution to the following '
                       'data issue has been implemented:')
