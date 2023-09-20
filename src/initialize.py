@@ -182,7 +182,7 @@ log_dir = str(home_dir / '.logs' / '{}.json')
 song_db_file = str(home_dir / '{}song_db.pqt')
 
 # Check if a COOKIE_FILE is set
-if os.environ.get('COOKIE_FILE') is None:
+if not os.environ.get('COOKIE_FILE'):
     try:
         cookie_file = next(home_dir.glob('**/*_cookies.txt'))
     except StopIteration:
@@ -193,6 +193,7 @@ if os.environ.get('COOKIE_FILE') is None:
     set_in_dot_env("COOKIE_FILE", cookie_file)
 else:
     cookie_file = os.environ.get('COOKIE_FILE')
+
 
 # Access Spotify API
 spotify_api = spotipy.Spotify(

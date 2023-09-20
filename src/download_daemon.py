@@ -99,8 +99,14 @@ def download_track(track_uri: str, logger=print):
         # Potentially fix permissions
         for restricted_path in (album_dir, mp3_fname, cov_fname):
             # TODO: set proper file permissions! 755
-            os.chmod(restricted_path, 0o0777)
-        logger('File permissions set.')
+            shortdir = restricted_path.replace(str(music_dir), '...')
+            try:  # dir not found err
+                os.chmod(restricted_path, 0o0777)
+                logger('File permissions set for', shortdir)
+            except FileNotFoundError as e:
+                logger(f'File permissions NOT set for', shortdir, f'\n{e}')
+                pass
+
 
     # Conclude
     if file_exists:

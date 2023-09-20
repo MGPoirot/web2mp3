@@ -6,18 +6,28 @@ import yt_dlp
 import pandas as pd
 import pytube
 
+# PSA: strictly define all substring patterns to avoid conflicts
+# the name of the module
 name = 'youtube'
+
+# what the tool can receive from the module
 target = 'track'
 
-# Identifier substrings should be defined strictly enough that a URL from
-# this platform can never contain this substring without being of this type.
+# substring patterns to match in a URL
+url_patterns = ['youtube.com', 'youtu.be', 'youtube:', ]
+
+# substring to recognize a playlist object
 playlist_identifier = '/playlist?'
+
+# substring to recognize an album object
 album_identifier = ' '  # YouTube does not have album object types
 
 playlist_handler = pytube.Playlist
 
-# For YouTube, there is no such things as albums
-# album_handler = lambda album_url: _
+
+def url_unshortner(object_url: str) -> str:
+    return object_url
+
 
 def sort_lookup(query: pd.Series, matched_obj: pd.Series):
     track_url = url2uri(query.track_url)
@@ -92,8 +102,12 @@ def audio_download(youtube_url: str, audio_fname: str, quality:int,
             'preferredquality': quality,
         }],
         'outtmpl': fname,
-        'cookiefile': cookie_file,
     }
+    if cookie_file:
+        if os.path.isfile(cookie_file):
+            ydl_opts.update({'cookiefile': cookie_file})
+        else:
+            logger('Provided cookiefile does noet exist. Ignored.')
     # Attempt download
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
