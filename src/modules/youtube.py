@@ -50,7 +50,7 @@ def uri2url(uri: str) -> str:
     return f'https://www.youtube.com/watch?v={uri.split(":")[-1]}'
 
 
-def get_description(track_url: str, logger=print, market=None) -> str:
+def get_description(track_url: str, **kwargs) -> str:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
 
@@ -64,6 +64,9 @@ def get_description(track_url: str, logger=print, market=None) -> str:
         :return: title as string
         :rtype: str or None
     """
+    logger = kwargs['logger'] if 'logger' in kwargs else print
+    ps = kwargs['print_space'] if 'print_space' in kwargs else 0
+
     # Get video title
     # TODO: replace video search with get page title, since
     # TODO: VideosSearch sometimes returns unexpected results:
@@ -71,7 +74,8 @@ def get_description(track_url: str, logger=print, market=None) -> str:
 
     yt_search_result = VideosSearch(track_url, limit=1).result()
     if not any(yt_search_result['result']):
-        logger(f'ValueError: No video found for "{track_url}"')
+        breakpoint()
+        logger(f'ValueError:'.ljust(ps), 'No video found for "{track_url}"')
         return None
     else:
         yt_search_result = yt_search_result['result'][0]

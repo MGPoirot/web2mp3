@@ -266,6 +266,7 @@ def do_match(track_url, source, logger=print, **kwargs):
     market = kwargs['market']
     do_overwrite = kwargs['do_overwrite']
     avoid_duplicates = kwargs['avoid_duplicates']
+    ps = kwargs['print_space']
     track_uri = source.url2uri(track_url)
 
     # Skip in case the URL is already in the database
@@ -273,7 +274,10 @@ def do_match(track_url, source, logger=print, **kwargs):
         return f'Skipped: TrackExists "{track_uri}"'
 
     # Get a description of the object to use for matching
-    query = source.get_description(track_url, logger, market)
+    query = source.get_description(track_url=track_url,
+                                   logger=logger,
+                                   market=market,
+                                   print_space=ps)
     if query is None:  # Failed to retrieve query
         return f'Failed: Could not form {source.name.capitalize()} query'
 
