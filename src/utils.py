@@ -13,6 +13,7 @@ from importlib import import_module
 from json.decoder import JSONDecodeError
 from collections.abc import Iterable
 import modules
+import importlib
 from pathlib import Path
 
 def hms2s(hhmmss: str) -> int:
@@ -71,13 +72,18 @@ def get_url_platform(track_url: str, logger: object = print):
         'soundcloud'
     """
 
-    url_patterns = {}
+    patterns = {}
     for module_path in Path(modules.__path__._path[0]).glob('*.py'):
-        module = __import__(f'{modules.__name__}.{module_path.stem}', fromlist=[])
-        url_patterns.update({p: module.name for p in module.url_patterns})
+        modules_name = modules.__name__
+        module_name = module_path.stem
+        # imports the module
+        importlib.__import__(f'{modules_name}.{module_name}', module_name)
+        # gets the imported module
+        module = __import__(f'{modules_name}.{module_name}', fromlist=[''])
+        patterns.update({p: module.name for p in module.url_patterns})
 
 
-    for pattern, domain in url_patterns.items():
+    for pattern, domain in patterns.items():
         if pattern in track_url:
             # Identify the platform where the URL is from
             try:
@@ -86,7 +92,7 @@ def get_url_platform(track_url: str, logger: object = print):
                 return
             return module
     logger(f'No pattern found in "{track_url}". '
-           f'Known patterns: {"; ".join(url_patterns)}')
+           f'Known patterns: {"; ".join(patterns)}')
     return None
 
 

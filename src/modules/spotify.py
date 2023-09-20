@@ -89,7 +89,8 @@ def get_search_platform():
     return youtube
 
 
-def get_description(track_url: str, logger, market: str) -> pd.Series:
+def get_description(track_url: str, **kwargs) -> pd.Series:
+    market = kwargs['market']
     # Gets information about the track that will be used as query for matching
     item = timeout_handler(spotify_api.track, track_url, market=market)
     track_tags = get_track_tags(item, do_light=False)
