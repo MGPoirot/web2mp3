@@ -401,6 +401,7 @@ def main(**kwargs):
 
     # Process URLs that were already provided
     for url in urls:
+        url = url.split('?')[0]  # sanitization
         match_audio_with_tags(url, **kwargs)
         # Start the daemons during the matching of further items
         if input_is('During', init_daemons):
