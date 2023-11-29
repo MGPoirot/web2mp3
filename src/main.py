@@ -347,7 +347,7 @@ def match_audio_with_tags(track_url: str, **kwargs):
         return f'UnknownPlatform "{track_url}"'
     else:
         logger(f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
-
+    
     search_result = do_match(track_url, source, logger, **kwargs)
     if isinstance(search_result, tuple):
         status, tags_uri, source_uri, track_uri = search_result
@@ -401,7 +401,7 @@ def main(**kwargs):
 
     # Process URLs that were already provided
     for url in urls:
-        url = url.split('?')[0]  # sanitization
+        # url = url.split('?')[0]  # sanitization
         match_audio_with_tags(url, **kwargs)
         # Start the daemons during the matching of further items
         if input_is('During', init_daemons):

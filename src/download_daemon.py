@@ -67,7 +67,7 @@ def download_track(track_uri: str, logger=print):
         if cover_url is None:
             logger('ValueError: No cover URL set.')
         elif cov_exists and not do_overwrite:
-            logger('FileExistsWarning:', cov_fname)
+            logger('FileExistsWarning:'.ljust(ps), f'"{cov_fname}"')
         else:
             if cov_exists:
                 logger('File Overwritten:'.ljust(ps), f'"{cov_fname}"')
@@ -252,10 +252,11 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
                  not os.path.isfile(daemon_dir.format(i))]
 
     if max_daemons == -1:
+        # Is it even possible to pass a -1 as flag value in bash?
         # For -1 we always add a daemon
         daemon_ns = [i for i in range(len(glob(daemon_dir.format('*'))) + 1) if
                      not os.path.isfile(daemon_dir.format(i))]
-
+    
     if len(daemon_ns):
         daemon_n = daemon_ns[0]  # Get the first DAEMON that is not running
     else:
