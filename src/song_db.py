@@ -1,7 +1,7 @@
 from initialize import song_db_file
+from utils import input_is
 import pandas as pd
 import os
-from time import time
 import shutil
 from pandas import Int64Dtype as PdInt
 from pandas import BooleanDtype as PdBool
@@ -61,7 +61,7 @@ def get_song_db() -> pd.DataFrame:
     # Evert minute we also store a backup
     if not os.path.isfile(tmp_path):
         sdb.to_parquet(tmp_path)
-    elif time() - os.stat(sdb_path).st_mtime > 60:
+    elif now() - os.stat(sdb_path).st_mtime > 60:
         sdb.to_parquet(tmp_path)
     return sdb
 
@@ -91,6 +91,9 @@ def set_song_db(uri: str, value=None, overwrite=True):
 
 def pop_song_db(uri: str):
     """ remove entry from song database"""
+    sdb = get_song_db()
+    item = sdb.loc[uri]
+    print(f'Deleted song data base entry "{item.title}" by "{item.album_artist}" ({uri})')
     get_song_db().drop(uri).to_parquet(song_db_file.format(''))
 
 
@@ -101,8 +104,9 @@ if __name__ == '__main__':
         duration = now() - then
 
         n_records = len(sdb)
-        records_to_do = sdb.title.notna().sum()
-        n_empty_records = n_records - records_to_do
+        to_do = sdb.title.notna()
+        n_to_do = to_do.sum()
+        n_empty_records = n_records - n_to_do
 
         backup_exists = os.path.isfile(tmp_path)
         backup_exists = 'exists' if backup_exists else 'does not exist'
@@ -110,13 +114,23 @@ if __name__ == '__main__':
 
         info = [
             ('number of processed records', n_empty_records),
-            ('number of unprocessed records', records_to_do),
+            ('number of unprocessed records', n_to_do),
             ('loading time', f'{duration:.3f}s'),
             ('location', sdb_path),
             ('backup', backup_exists)
         ]
         print('SONG DATA BASE INFORMATION:',
               *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info])
+        if n_to_do:
+            look_closer = input('>>> Do you want to see a list of items, or check per item? List / Item / [No]')
+            if input_is('List', look_closer) or input_is('Item', look_closer):
+                for i, (uri, record) in enumerate(sdb[to_do].iterrows()):
+                    print(f'{str(i + 1).rjust(3)}/{n_to_do}:', uri)
+                    print(record)
+                    if input_is('Item', look_closer):
+                        do_pop = input('>>> Do you want to permanently delete this item from the pending records? Yes / [No]')
+                        if input_is('Yes', do_pop):
+                            pop_song_db(uri)
     except FileNotFoundError as e:
         print('Failed to load the song data base')
 

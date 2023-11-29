@@ -5,6 +5,8 @@ import spotipy
 import eyed3
 import re
 from pathlib import Path as Path
+from glob import glob
+import time
 
 eyed3.log.setLevel("ERROR")
 
@@ -156,6 +158,7 @@ def run_setup_wizard():
 home_dir = Path(__file__).parents[1]
 
 # Check if Web2MP3 has been set up.
+
 ENV_PATH = Path(home_dir, '.config', '.env')
 if not dotenv.find_dotenv(ENV_PATH):
     print("No environment file found. Initiating setup wizard.")
@@ -181,6 +184,7 @@ daemon_dir = str(home_dir / '.daemons' / 'daemon-{}.tmp')
 log_dir = str(home_dir / '.logs' / '{}.json')
 song_db_file = str(home_dir / '{}song_db.pqt')
 
+     
 # Check if a COOKIE_FILE is set
 if not os.environ.get('COOKIE_FILE'):
     try:
@@ -199,3 +203,37 @@ else:
 spotify_api = spotipy.Spotify(
     client_credentials_manager=SpotifyClientCredentials()
 )
+
+if __name__ == '__main__':
+    # run utilities
+
+    # Check number of existing log files
+    log_files_json = glob(log_dir.format('*'))
+    log_files_txt = glob(log_dir.format('*').replace('.json', '.txt'))
+    log_files = log_files_json + log_files_txt
+    n_log_files = len(log_files)
+    if n_log_files > 100:
+        rm_logs = input(f'Initialization found many {n_log_files} log files. Remove up to last 100?  yes/[No]  ')
+        if rm_logs in 'Yesyes':
+            # rm log files
+            log_files = sorted(log_files, key=lambda x: os.path.getmtime(x))
+            for log_file in log_files[:-100]:
+                os.remove(log_file)
+            print(n_log_files - 100, 'log files deleted.')
+            pass
+    else:
+        print(f'Found {n_log_files} log files.')
+    daemons = glob(daemon_dir.format('*'))
+    n_daemons = len(daemons)
+    print(f'Found {n_daemons} daemons.')
+    for daemon in daemons:
+        file_mtime = os.path.getmtime(daemon)
+        current_time = time.time()
+        time_diff = current_time - file_mtime
+        days_diff = round(time_diff / (60 * 60 * 24))
+        print(daemon.ljust(60), f'{days_diff} days old')
+    if any(daemons):
+        rm_daemons = input('Delete all daemon files?  yes/[No]')
+        if rm_daemons in 'Yesyes':
+            for daemon in daemons:
+                os.remove(daemon)
