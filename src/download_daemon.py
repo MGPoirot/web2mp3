@@ -1,4 +1,4 @@
-from initialize import music_dir, daemon_dir, log_dir
+from initialize import music_dir, daemon_dir, log_dir, disp_daemons
 from utils import Logger, get_url_platform, get_path_components, \
     track_exists
 import os
@@ -261,6 +261,10 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
         daemon_n = daemon_ns[0]  # Get the first DAEMON that is not running
     else:
         if max_daemons != -1:
+            if verbose:
+                print('No Daemon initiated since all Daemons are already running:')
+                disp_daemons()
+                print('Run initialize.py if you want the clean these up.')
             return  # Return if all Daemons are running
         # Always initiate the next daemon
         all_daemon_files = range(len(glob(daemon_dir.format('*'))))

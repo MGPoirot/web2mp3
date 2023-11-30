@@ -154,6 +154,7 @@ def run_setup_wizard():
           'Web2MP3 set up successful.')
 
 
+
 # Where are we?
 home_dir = Path(__file__).parents[1]
 
@@ -204,6 +205,19 @@ spotify_api = spotipy.Spotify(
     client_credentials_manager=SpotifyClientCredentials()
 )
 
+
+def disp_daemons():
+    daemons = glob(daemon_dir.format('*'))
+    n_daemons = len(daemons)
+    print(f'Found {n_daemons} daemons.')
+    for daemon in daemons:
+        file_mtime = os.path.getmtime(daemon)
+        current_time = time.time()
+        time_diff = current_time - file_mtime
+        days_diff = round(time_diff / (60 * 60 * 24))
+        print(daemon.ljust(60), f'{days_diff} days old')
+
+
 if __name__ == '__main__':
     # run utilities
 
@@ -223,15 +237,8 @@ if __name__ == '__main__':
             pass
     else:
         print(f'Found {n_log_files} log files.')
+    disp_daemons()
     daemons = glob(daemon_dir.format('*'))
-    n_daemons = len(daemons)
-    print(f'Found {n_daemons} daemons.')
-    for daemon in daemons:
-        file_mtime = os.path.getmtime(daemon)
-        current_time = time.time()
-        time_diff = current_time - file_mtime
-        days_diff = round(time_diff / (60 * 60 * 24))
-        print(daemon.ljust(60), f'{days_diff} days old')
     if any(daemons):
         rm_daemons = input('Delete all daemon files?  yes/[No]')
         if rm_daemons in 'Yesyes':
