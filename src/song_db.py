@@ -115,22 +115,25 @@ if __name__ == '__main__':
         info = [
             ('number of processed records', n_empty_records),
             ('number of unprocessed records', n_to_do),
-            ('loading time', f'{duration:.3f}s'),
+            ('Successful loading time', f'{duration:.3f}s'),
             ('location', sdb_path),
             ('backup', backup_exists)
         ]
         print('SONG DATA BASE INFORMATION:',
               *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info])
         if n_to_do:
-            look_closer = input('>>> Do you want to see a list of items, or check per item? List / Item / [No]')
+            look_closer = input('>>> Do you want to see a list of items, or check per item? List / Item / [No]  ')
             if input_is('List', look_closer) or input_is('Item', look_closer):
                 for i, (uri, record) in enumerate(sdb[to_do].iterrows()):
                     print(f'{str(i + 1).rjust(3)}/{n_to_do}:', uri)
                     print(record)
                     if input_is('Item', look_closer):
-                        do_pop = input('>>> Do you want to permanently delete this item from the pending records? Yes / [No]')
+                        do_pop = input('>>> Do you want to permanently delete this item from the pending records? Yes / [No]  ')
                         if input_is('Yes', do_pop):
                             pop_song_db(uri)
+                            print('Deleted.')
+                        else:
+                            print('Not deleted.')
     except FileNotFoundError as e:
         print('Failed to load the song data base')
 
