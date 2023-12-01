@@ -82,9 +82,17 @@ def download_track(track_uri: str, logger=print):
             logger('File Overwritten:'.ljust(ps), f'"{mp3_fname}"')
             os.remove(mp3_fname)
 
+        # Download audio, robust to FileNameTooLongError
+        # for i in len(track_p):
+        #     short_name = os.path.join(album_dir, f'{tr_prefix}{track_p[:-i]}.mp3')
+        #     download_method.audio_download(track_url, short_name, preferred_quality, logger=logger)
+        #     if os.path.isfile(short_name): 
+        #         break
+        # breakpoint()
+        
         # Download audio
-        download_method.audio_download(track_url, mp3_fname, preferred_quality,
-                                       logger=logger)
+        download_method.audio_download(track_url, mp3_fname, preferred_quality, logger=logger)
+
 
         # Set file tags
         if os.path.isfile(mp3_fname):
