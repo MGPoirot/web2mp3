@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from initialize import cookie_file
-from utils import hms2s
+from utils import hms2s, input_is
 from youtubesearchpython import VideosSearch
 import os
 import yt_dlp
@@ -50,7 +52,7 @@ def uri2url(uri: str) -> str:
     return f'https://www.youtube.com/watch?v={uri.split(":")[-1]}'
 
 
-def get_description(track_url: str, **kwargs) -> str:
+def get_description(track_url: str, **kwargs) -> str | None:
     """
     Receives the link to a YouTube or YouTube Music video and returns the title
 
@@ -68,21 +70,40 @@ def get_description(track_url: str, **kwargs) -> str:
     ps = kwargs['print_space'] if 'print_space' in kwargs else 0
 
     # Get video title
-    # TODO: replace video search with get page title, since
-    # TODO: VideosSearch sometimes returns unexpected results:
-    # TODO: https://www.youtube.com/watch?v=qhD3jKUXlGU&ab_channel=Vexento
+    track_url = track_url.split('&')[0]
 
     yt_search_result = VideosSearch(track_url, limit=1).result()
     if not any(yt_search_result['result']):
-        breakpoint()
-        logger(f'ValueError:'.ljust(ps), 'No video found for "{track_url}"')
-        return None
+        # In normal situations VideosSearch should work just fine.
+        # I've seen few occasions where it unexpectedly did not, the following
+        # code is a small bypass to this automatic VideosSearch procedure.
+        # Note that it may halt downloading (TODO: implement headless)
+        logger(f'ValueError:'.ljust(ps), f'No video found for "{track_url}"')
+        try_manual = input('How to continue?\n'
+                           '1) Manual YouTube [Q]uery\n'
+                           '2) Manual track [D]escription\n'
+                           '3) [Abort]\n')
+        if not try_manual or input_is('Abort', try_manual):
+            return None
+        elif input_is('Query', try_manual) or try_manual == 1:
+            new_yt_query = input('Give YouTube Query:  ')
+            yt_search_result = VideosSearch(new_yt_query, limit=1).result()
+            if not any(yt_search_result['result']):
+                logger(f'ValueError:'.ljust(ps),
+                       f'No video found for "{new_yt_query}"')
+                return None
+        elif input_is('Description', try_manual) or try_manual == 2:
+            yt_search_result = {
+                'title': input('Video title?'),
+                'duration': input('Video duration in mm:ss?  '),
+                'channel': {'name': ''},
+            }
     else:
         yt_search_result = yt_search_result['result'][0]
     youtube_duration = hms2s(yt_search_result['duration'])
     video_title = yt_search_result['title']
     uploader_id = yt_search_result['channel']['name']
-    if uploader_id not in video_title:
+    if uploader_id.lower() not in video_title.lower():
         video_title += f' - {uploader_id}'
 
     # We return a series object
