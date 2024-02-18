@@ -109,9 +109,14 @@ def pop_song_db(uri: str):
 if __name__ == '__main__':
     try:
         repair_sdb(verbose=False)
+
+        then = now()
+        sdb = get_song_db(columns=[])
+        shrt_duration = now() - then
+
         then = now()
         sdb = get_song_db()
-        duration = now() - then
+        full_duration = now() - then
 
         n_records = len(sdb)
         to_do = sdb.title.notna()
@@ -125,7 +130,8 @@ if __name__ == '__main__':
         info = [
             ('number of processed records', n_empty_records),
             ('number of unprocessed records', n_to_do),
-            ('Successful loading time', f'{duration:.3f}s'),
+            ('Index loading time', f'{shrt_duration:.3f}s'),
+            ('Full loading time', f'{full_duration:.3f}s'),
             ('location', sdb_path),
             ('backup', backup_exists)
         ]
