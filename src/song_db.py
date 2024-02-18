@@ -111,12 +111,12 @@ if __name__ == '__main__':
         repair_sdb(verbose=False)
 
         then = now()
-        sdb = get_song_db(columns=[])
-        shrt_duration = now() - then
-
-        then = now()
         sdb = get_song_db()
         full_duration = now() - then
+
+        then = now()
+        sdb_small = get_song_db(columns=[])
+        shrt_duration = now() - then
 
         n_records = len(sdb)
         to_do = sdb.title.notna()
