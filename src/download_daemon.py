@@ -270,7 +270,7 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
     else:
         if max_daemons != -1:
             if verbose:
-                print('No Daemon initiated since all Daemons are already running:')
+                print('No Daemon initiated, all Daemons are already running:')
                 disp_daemons()
                 print('Run initialize.py if you want the clean these up.')
             return  # Return if all Daemons are running
