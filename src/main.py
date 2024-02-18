@@ -270,7 +270,7 @@ def do_match(track_url, source, logger=print, **kwargs):
     track_uri = source.url2uri(track_url)
 
     # Skip in case the URL is already in the database
-    if track_uri in get_song_db().index and not do_overwrite:
+    if track_uri in get_song_db(columns=[]).index and not do_overwrite:
         return f'Skipped: TrackExists "{track_uri}"'
 
     # Get a description of the object to use for matching
@@ -313,7 +313,7 @@ def do_match(track_url, source, logger=print, **kwargs):
 
     #  2) Check if the found tracks is already in the database
     if not do_overwrite:
-        song_db_indices = get_song_db().index
+        song_db_indices = get_song_db(columns=[]).index
         ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
         errs = [err for err, idx in ctrl if idx in song_db_indices]
         if any(errs):

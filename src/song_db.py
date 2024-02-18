@@ -47,24 +47,25 @@ def repair_sdb(verbose=True):
     shutil.copy(tmp_path, sdb_path)
     
 
-def get_song_db() -> pd.DataFrame:
+def get_song_db(columns=None) -> pd.DataFrame:
     """
     Load the Song Data Base (song_db) file, or
     create one if it does not exist.
     The song_db is used to store song properties for them to be processed and
     URLs of past processes in order to avoid processing them twice.
     """
+
     # Load the song database is it exists
     if not os.path.isfile(sdb_path):
         sdb = pd.DataFrame(columns=song_db_template).astype(song_db_template)
         sdb.to_parquet(sdb_path)
     try:
         # Test if the file can be loaded
-        sdb = pd.read_parquet(sdb_path)
+        sdb = pd.read_parquet(sdb_path, columns=columns)
     except:  #OSError, but also cramjam.DecompressionError
         repair_sdb()
         sleep(0.3)
-        return get_song_db()
+        return get_song_db(columns=columns)
 
     # Every minute we also store a backup
     if not os.path.isfile(tmp_path):
