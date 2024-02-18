@@ -8,6 +8,7 @@ from pandas import BooleanDtype as PdBool
 from pandas import StringDtype as PdStr
 from pandas import Float32Dtype as PdFlt
 from time import time as now
+from time import sleep
 
 song_db_template = {
     'album': PdStr(),
@@ -39,6 +40,13 @@ sdb_path = song_db_file.format('')
 tmp_path = song_db_file.format('.')
 
 
+def repair_sdb(verbose=True):
+    # Creates a song data base from a copy
+    if verbose:
+        print('The song data base was corrupted. Loading from backup.')
+    shutil.copy(tmp_path, sdb_path)
+    
+
 def get_song_db() -> pd.DataFrame:
     """
     Load the Song Data Base (song_db) file, or
@@ -54,11 +62,11 @@ def get_song_db() -> pd.DataFrame:
         # Test if the file can be loaded
         sdb = pd.read_parquet(sdb_path)
     except:  #OSError, but also cramjam.DecompressionError
-        print('The song data base was corrupted. Loading from backup.')
-        shutil.copy(tmp_path, sdb_path)
-        sdb = pd.read_parquet(sdb_path)
+        repair_sdb()
+        sleep(0.3)
+        return get_song_db()
 
-    # Evert minute we also store a backup
+    # Every minute we also store a backup
     if not os.path.isfile(tmp_path):
         sdb.to_parquet(tmp_path)
     elif now() - os.stat(sdb_path).st_mtime > 60:
@@ -99,6 +107,7 @@ def pop_song_db(uri: str):
 
 if __name__ == '__main__':
     try:
+        repair_sdb(verbose=False)
         then = now()
         sdb = get_song_db()
         duration = now() - then
