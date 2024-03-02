@@ -214,7 +214,7 @@ meta-data tags.
 By performing these tasks in the background, the semi-supervised process of
 matching audio with meta-data is not interrupted.
 
-After each match, songs are stored in the song data base (SDB). DAEMONs will
+After each match, songs are stored in the song database (SDB). DAEMONs will
 attempt to process any unprocessed song the the SDB and finish when there is
 nothing left. Since DAEMONs are headless by default, they store logbooks to the
 `.log` directory.

@@ -118,7 +118,7 @@ def download_track(track_uri: str, logger=print):
     # Conclude
     if file_exists:
         set_song_db(track_uri)
-        logger('Song data base value cleared to None.')
+        logger('Song database value cleared to None.')
         conclusion = 'finished successfully.'
     else:
         conclusion = 'failed.'
