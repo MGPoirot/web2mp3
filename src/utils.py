@@ -16,6 +16,7 @@ import modules
 import importlib
 from pathlib import Path
 
+
 def hms2s(hhmmss: str) -> int:
     """
     Converts a string representing time in the format "hh:mm:ss" to seconds.
@@ -130,7 +131,7 @@ class Logger:
         :type verbose: bool
     """
 
-    def __init__(self, full_path=None, verbose=False):
+    def __init__(self, full_path: Path=None, verbose=False):
         """
         Initializes the logger.
 
@@ -151,7 +152,7 @@ class Logger:
             sys.exit()
         self.verbose = verbose  # Always print if true
 
-        if not os.path.isfile(self.path):
+        if not self.path.is_file():
             self.id = 0
             self.create_new()
         else:
@@ -518,6 +519,10 @@ def timeout_handler(func, *args, **kwargs):
 
 
 def unique_fname(file_path):
+    """
+     Preserves file_path class type in last line
+    """
+
     fpath = str(file_path)
 
     if not os.path.isfile(fpath):

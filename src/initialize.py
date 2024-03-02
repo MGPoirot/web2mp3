@@ -5,8 +5,14 @@ import spotipy
 import eyed3
 import re
 import pathlib
-from glob import glob
 import time
+from glob import glob as dumb_glob
+
+
+def glob(pathname, *args, **kwargs) -> list:
+    # Support Path by str conversion
+    return dumb_glob(str(pathname), *args, **kwargs)
+
 
 eyed3.log.setLevel("ERROR")
 
@@ -192,11 +198,10 @@ default_market = os.environ.get('SPOTIFY_MARKET')
 
 # Maybe I will replace the use of string with Path objects here as well in the
 # future, but currently, nothing is broken so no need to fix anything.
-daemon_dir = str(home_dir / '.daemons' / 'daemon-{}.tmp')
-log_dir = str(home_dir / '.logs' / '{}.json')
-song_db_file = str(home_dir / '{}song_db.pqt')
+daemon_dir = home_dir / '.daemons' / 'daemon-{}.tmp'
+log_dir = home_dir / '.logs' / '{}.json'
+song_db_file = home_dir / '{}song_db.pqt'
 
-     
 # Check if a COOKIE_FILE is set
 if not os.environ.get('COOKIE_FILE'):
     try:
