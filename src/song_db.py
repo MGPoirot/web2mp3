@@ -41,11 +41,11 @@ tmp_path = song_db_file.format('.')
 
 
 def repair_sdb(verbose=True):
-    # Creates a song data base from a copy
+    # Creates a song database from a copy
     if verbose:
         print('The song data base was corrupted. Loading from backup.')
     shutil.copy(tmp_path, sdb_path)
-    
+
 
 def get_song_db(columns=None) -> pd.DataFrame:
     """
@@ -55,23 +55,24 @@ def get_song_db(columns=None) -> pd.DataFrame:
     URLs of past processes in order to avoid processing them twice.
     """
 
-    # Load the song database is it exists
+    # Load the song database if it exists
     if not os.path.isfile(sdb_path):
-        sdb = pd.DataFrame(columns=song_db_template).astype(song_db_template)
+        sdb = pd.DataFrame(columns=list(song_db_template)).astype(
+            song_db_template)
         sdb.to_parquet(sdb_path)
     try:
         # Test if the file can be loaded
         sdb = pd.read_parquet(sdb_path, columns=columns)
-    except:  #OSError, but also cramjam.DecompressionError
+    except:  # OSError, but also cramjam.DecompressionError
         repair_sdb()
         sleep(0.3)
         return get_song_db(columns=columns)
 
     # Every minute we also store a backup
-    if not os.path.isfile(tmp_path):
-        sdb.to_parquet(tmp_path)
-    elif now() - os.stat(sdb_path).st_mtime > 60:
-        sdb.to_parquet(tmp_path)
+    if all([c in sdb for c in song_db_template]):
+        if not os.path.isfile(tmp_path) or now() - os.stat(
+                sdb_path).st_mtime > 60:
+            sdb.to_parquet(tmp_path)
     return sdb
 
 
@@ -83,17 +84,21 @@ def set_song_db(uri: str, value=None, overwrite=True):
         return
 
     song_db = get_song_db()
+
     if uri in song_db.index and not overwrite:
         return
 
     if value is None:
-        entry = pd.DataFrame(columns=song_db_template, index=[uri]).astype(song_db_template)
+        entry = pd.DataFrame(columns=song_db_template, index=[uri]).astype(
+            song_db_template)
     else:
         entry = value.to_frame(uri).T.astype(song_db_template)
 
     # Add entry and avoid duplicates
     song_db = pd.concat([song_db, entry])
     song_db = song_db[~song_db.index.duplicated(keep='last')]
+    if not song_db.shape[0]:
+        breakpoint()
     song_db.to_parquet(song_db_file.format(''))
     return
 
@@ -102,7 +107,8 @@ def pop_song_db(uri: str):
     """ remove entry from song database"""
     sdb = get_song_db()
     item = sdb.loc[uri]
-    print(f'Deleted song data base entry "{item.title}" by "{item.album_artist}" ({uri})')
+    print(
+        f'Deleted song data base entry "{item.title}" by "{item.album_artist}" ({uri})')
     get_song_db().drop(uri).to_parquet(song_db_file.format(''))
 
 
@@ -136,15 +142,18 @@ if __name__ == '__main__':
             ('backup', backup_exists)
         ]
         print('SONG DATA BASE INFORMATION:',
-              *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info])
+              *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in
+                info])
         if n_to_do:
-            look_closer = input('>>> Do you want to see a list of items, or check per item? List / Item / [No]  ')
+            look_closer = input(
+                '>>> Do you want to see a list of items, or check per item? List / Item / [No]  ')
             if input_is('List', look_closer) or input_is('Item', look_closer):
                 for i, (uri, record) in enumerate(sdb[to_do].iterrows()):
                     print(f'{str(i + 1).rjust(3)}/{n_to_do}:', uri)
                     print(record)
                     if input_is('Item', look_closer):
-                        do_pop = input('>>> Do you want to permanently delete this item from the pending records? Yes / [No]  ')
+                        do_pop = input(
+                            '>>> Do you want to permanently delete this item from the pending records? Yes / [No]  ')
                         if input_is('Yes', do_pop):
                             pop_song_db(uri)
                             print('Deleted.')
@@ -152,4 +161,3 @@ if __name__ == '__main__':
                             print('Not deleted.')
     except FileNotFoundError as e:
         print('Failed to load the song data base')
-

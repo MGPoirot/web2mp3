@@ -4,11 +4,16 @@ import os
 import spotipy
 import eyed3
 import re
-from pathlib import Path as Path
+import pathlib
 from glob import glob
 import time
 
 eyed3.log.setLevel("ERROR")
+
+
+class Path(type(pathlib.Path())):
+    def format(self, *args, **kwargs):
+        return Path(str(self).format(*args, **kwargs))
 
 
 class FmtPath(os.PathLike):
@@ -30,38 +35,47 @@ class FmtPath(os.PathLike):
         return str(self._path)
 
 
-def set_in_dot_env(key: str, value: str, overwrite=True):
-    key = key.upper()
+def set_in_dot_env(key: str, value: str, overwrite=True) -> None:
+    """
+    Add a key value pair to the .env file.
+    Avoids duplications of keys by overwriting.
+    """
+    # Create an environment file if none exists
     if not ENV_PATH.is_file():
-        # Write first entry
         ENV_PATH.parent.mkdir(exist_ok=True)
         with open(ENV_PATH, 'w') as f:
-            f.write(f'{key}={value}\n')
-        return
-    else:
-        with open(ENV_PATH, 'r') as f:
-            data = f.read()
+            f.write('# ENVIRONMENT FILE CREATED AUTOMATICALLY BY WEB2MP3')
 
+    # Read the data in the environment file
+    with open(ENV_PATH, 'r') as f:
+        data = f.read()
+
+    # Ensure the key is in capitals
+    key = key.upper()
+
+    # Check if there are previous enties for this key
     old_entries = re.findall(f"{key}=.*?\n", data)
+
     if not any(old_entries) or not overwrite:
-        # Append new entry
+        # Append to the environment file
         with open(ENV_PATH, 'a') as f:
             f.write(f'{key}={value}\n')
-        return
-    elif len(old_entries) > 1:
-        print(f'ValueWarning: Key "{key}" found {len(old_entries)} times. '
-              f'Replace is ambiguous. Replacing last entry.')
-    old_entry = old_entries[-1]
-    data.replace(old_entry, f'{key}={value}\n')
-    with open('file.txt', 'w') as file:
-        file.write(data)
+    else:
+        # Replace the old value of the last entry
+        old_entry = old_entries[-1]
+        data.replace(old_entry, f'{key}={value}\n')
+        with open(ENV_PATH, 'w') as file:
+            file.write(data)
+    return
 
 
 def sfy_validator(ans: str) -> bool:
+    # Validates user input for Spotify client secret
     return all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
 
 
 def pth_validator(ans: str) -> bool:
+    # Validates user input for music download directory
     return Path(ans).parent.is_dir()
 
 
@@ -153,13 +167,10 @@ def run_setup_wizard():
     print('Secrets successfully stored.\n'
           'Web2MP3 set up successful.')
 
-
-
 # Where are we?
 home_dir = Path(__file__).parents[1]
 
 # Check if Web2MP3 has been set up.
-
 ENV_PATH = Path(home_dir, '.config', '.env')
 if not dotenv.find_dotenv(ENV_PATH):
     print("No environment file found. Initiating setup wizard.")
@@ -218,7 +229,7 @@ def disp_daemons():
         print(daemon.ljust(60), f'{days_diff} days old')
 
 
-if __name__ == '__main__':
+def run_clean_up(prompt=True):
     # run utilities
 
     # Check number of existing log files
@@ -227,7 +238,11 @@ if __name__ == '__main__':
     log_files = log_files_json + log_files_txt
     n_log_files = len(log_files)
     if n_log_files > 100:
-        rm_logs = input(f'Initialization found many {n_log_files} log files. Remove up to last 100?  yes/[No]  ')
+        if prompt:
+            rm_logs = input(f'Initialization found many {n_log_files} log '
+                            f'files. Remove up to last 100?  yes/[No]  ')
+        else:
+            rm_logs = 'Yes'
         if rm_logs in 'Yesyes':
             # rm log files
             log_files = sorted(log_files, key=lambda x: os.path.getmtime(x))
@@ -237,6 +252,7 @@ if __name__ == '__main__':
             pass
     else:
         print(f'Found {n_log_files} log files.')
+
     disp_daemons()
     daemons = glob(daemon_dir.format('*'))
     if any(daemons):
@@ -244,3 +260,7 @@ if __name__ == '__main__':
         if rm_daemons in 'Yesyes':
             for daemon in daemons:
                 os.remove(daemon)
+
+
+if __name__ == '__main__':
+    run_clean_up(prompt=True)
