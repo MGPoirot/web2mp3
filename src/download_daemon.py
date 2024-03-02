@@ -1,8 +1,7 @@
-from initialize import music_dir, daemon_dir, log_dir, disp_daemons
+from initialize import music_dir, daemon_dir, log_dir, disp_daemons, glob
 from utils import Logger, get_url_platform, get_path_components, \
     track_exists
 import os
-from glob import glob
 from song_db import get_song_db, set_song_db
 from tag_manager import download_cover_img, set_file_tags
 import atexit
@@ -257,13 +256,13 @@ def get_tasks() -> list:
 def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
     # List daemons that are not running
     daemon_ns = [i for i in range(max_daemons) if
-                 not os.path.isfile(daemon_dir.format(i))]
+                 not daemon_dir.format(i).is_file()]
 
     if max_daemons == -1:
         # Is it even possible to pass a -1 as flag value in bash?
         # For -1 we always add a daemon
         daemon_ns = [i for i in range(len(glob(daemon_dir.format('*'))) + 1) if
-                     not os.path.isfile(daemon_dir.format(i))]
+                     not daemon_dir.format(i).is_file()]
     
     if len(daemon_ns):
         daemon_n = daemon_ns[0]  # Get the first DAEMON that is not running
@@ -277,7 +276,7 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
         # Always initiate the next daemon
         all_daemon_files = range(len(glob(daemon_dir.format('*'))))
         daemons = [i for i in all_daemon_files if
-                   os.path.isfile(daemon_dir.format(i))]
+                   daemon_dir.format(i).is_file()]
         daemon_n = daemons[-1] + 1
 
     # Initiate the DAEMON
