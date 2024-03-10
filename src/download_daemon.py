@@ -14,7 +14,6 @@ def download_track(track_uri: str, logger=print):
     """
     This handles downloading audio from YouTube and setting the right mp3 tags.
     :param track_uri:
-    :param download_method:
     :param logger:
     :return: Does not return anything
     """
@@ -83,15 +82,20 @@ def download_track(track_uri: str, logger=print):
 
         # Download audio, robust to FileNameTooLongError
         # for i in len(track_p):
-        #     short_name = os.path.join(album_dir, f'{tr_prefix}{track_p[:-i]}.mp3')
-        #     download_method.audio_download(track_url, short_name, preferred_quality, logger=logger)
+        #     short_name = os.path.join(
+        #       album_dir, f'{tr_prefix}{track_p[:-i]}.mp3'
+        #     )
+        #     download_method.audio_download(
+        #       track_url,
+        #       short_name,
+        #       preferred_quality,
+        #       logger=logger,
+        #     )
         #     if os.path.isfile(short_name): 
-        #         break
-        # breakpoint()
-        
+        #         breakpoint()
+
         # Download audio
         download_method.audio_download(track_url, mp3_fname, preferred_quality, logger=logger)
-
 
         # Set file tags
         if os.path.isfile(mp3_fname):
@@ -113,7 +117,6 @@ def download_track(track_uri: str, logger=print):
             except FileNotFoundError as e:
                 logger(f'File permissions NOT set for', shortdir, f'\n{e}')
                 pass
-
 
     # Conclude
     if file_exists:

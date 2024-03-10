@@ -186,8 +186,8 @@ dotenv.load_dotenv(ENV_PATH)
 # Check if setup file is complete, if not, resume setup
 env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', \
     'SPOTIPY_CLIENT_SECRET', 'SPOTIFY_MARKET'
-env_vals = [os.environ.get(v) for v in env_keys]
-if None in env_vals:
+env_exists = [True if os.environ.get(v) else False for v in env_keys]
+if not all(env_exists):
     print("Incomplete environment file found. Resuming setup.")
     run_setup_wizard()
 dotenv.load_dotenv(ENV_PATH)
