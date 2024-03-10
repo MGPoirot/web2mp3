@@ -40,10 +40,9 @@ sdb_path = song_db_file.format('')
 tmp_path = song_db_file.format('.')
 
 
-def repair_sdb(verbose=True) -> None:
+def repair_sdb(verbose='') -> None:
     # Creates a song database from a copy
-    if verbose:
-        print('The song database was corrupted. Loading from backup.')
+    print(f'Song DB loaded from backup. {verbose}')
     shutil.copy(tmp_path, sdb_path)
 
 
@@ -63,9 +62,9 @@ def get_song_db(columns=None) -> pd.DataFrame:
     try:
         # Test if the file can be loaded
         sdb = pd.read_parquet(sdb_path, columns=columns)
-    except:  # OSError, but also cramjam.DecompressionError
-        repair_sdb()
-        sleep(0.3)
+    except Exception as e:  # OSError, but also cramjam.DecompressionError
+        repair_sdb(verbose=str(e))
+        sleep(0.1)
         return get_song_db(columns=columns)
 
     # Every minute we also store a backup
@@ -83,7 +82,7 @@ def set_song_db(uri: str, value=None, overwrite=True) -> None:
         # None because tags were created manually.
         return
 
-    if uri in get_song_db(columns=[]).index and not overwrite:
+    if not overwrite and uri in get_song_db(columns=[]).index:
         return
 
     # Append the uri-value pair to the data frame.
@@ -101,9 +100,8 @@ def set_song_db(uri: str, value=None, overwrite=True) -> None:
     sdb = get_song_db()
     sdb = pd.concat([sdb, entry])
     sdb = sdb[~sdb.index.duplicated(keep='last')]
-    if not sdb.shape[0]:
-        breakpoint()
     sdb.to_parquet(song_db_file.format(''))
+    return
 
 
 def pop_song_db(uri: str) -> None:
@@ -116,7 +114,7 @@ def pop_song_db(uri: str) -> None:
 
 
 def debug_song_db() -> None:
-    repair_sdb(verbose=False)
+    repair_sdb(verbose='debug_song_db was called')
 
     # Time a full load
     then = now()

@@ -14,6 +14,7 @@ from json.decoder import JSONDecodeError
 from collections.abc import Iterable
 import modules
 import importlib
+from requests.exceptions import ReadTimeout
 from pathlib import Path
 
 
@@ -83,7 +84,6 @@ def get_url_platform(track_url: str, logger: object = print):
         module = __import__(f'{modules_name}.{module_name}', fromlist=[''])
         patterns.update({p: module.name for p in module.url_patterns})
 
-
     for pattern, domain in patterns.items():
         if pattern in track_url:
             # Identify the platform where the URL is from
@@ -112,12 +112,14 @@ def shorten_url(url: str) -> str:
     Example:
         > shorten_url(r'https://www.youtube.com/watch?v=z6aONWHhTCU')
         z6aONWHhTCU
+        > shorten_url('spotify:track:7h5crXBSY5sspXRIlklv74')
+        7h5crXBSY5sspXRIlklv74
     """
     if '=' in url:
         url = url.split('=')[1] if '=' in url else url
     else:
         url = url.split('/')[-1]
-    return url.split('&')[0]
+    return url.split('&')[0].split(':')[0]
 
 
 class Logger:
@@ -131,7 +133,7 @@ class Logger:
         :type verbose: bool
     """
 
-    def __init__(self, full_path: Path=None, verbose=False):
+    def __init__(self, full_path: Path = None, verbose=False):
         """
         Initializes the logger.
 
@@ -279,6 +281,7 @@ def in_wrapper(module):
         def read(mode=''):
             with open(source_path, f'r{mode}') as file:
                 return module.load(file)
+
         try:
             try:
                 return read()
@@ -332,11 +335,11 @@ def in_wrapper(module):
                 print(e)
         except FileNotFoundError:
             print("Error: File not found.")
+
     return in_method
 
 
 def out_wrapper(module, **kwargs):
-
     def out_method(obj: dict, target_path: str):
         """
         Write dictionary object to a JSON file
@@ -346,13 +349,16 @@ def out_wrapper(module, **kwargs):
         :param target: The path to the output JSON file
         :type target: str
         """
+
         def write(mode=''):
             with open(target_path, f'w{mode}') as file:
                 module.dump(obj, file, **kwargs)
+
         try:
             write()
         except TypeError as e:
             write(mode='b')
+
     return out_method
 
 
@@ -442,7 +448,7 @@ def sanitize_track_name(track_name: str) -> str:
     return track_name
 
 
-def track_exists(artist_p: str, track_p: str, logger=print) -> bool:
+def track_exists(artist_p: str, track_p: str, logger=print) -> list:
     """
     Check if this song is already available, maybe in a different album
 
@@ -480,7 +486,8 @@ def get_path_components(mp3_tags: pd.Series) -> list:
 
     # I would like to dedicate this line the XXXTENTACION,
     # who came up with an album called '?'.
-    path_components = [c if any(c) else 'ILLEGAL_CHARACTERS_ONLY' for c in path_components]
+    path_components = [c if any(c) else 'ILLEGAL_CHARACTERS_ONLY' for c in
+                       path_components]
     return path_components
 
 
@@ -508,7 +515,7 @@ def timeout_handler(func, *args, **kwargs):
         try:
             outcome = func(*args, **kwargs)
             return outcome
-        except TimeoutError:
+        except (TimeoutError, ReadTimeout):
             n_timeouts += 1
             print(f'Encountered a TimeOutError... '
                   f'waiting {n_timeouts}/{max_time_outs}')
@@ -542,4 +549,3 @@ def unique_fname(file_path):
     # Convert back to input instance type:
     new_file_path = file_path.__class__(full_str)
     return new_file_path
-
