@@ -42,7 +42,7 @@ tmp_path = song_db_file.format('.')
 
 def repair_sdb(verbose='') -> None:
     # Creates a song database from a copy
-    print(f'Song DB loaded from backup. {verbose}')
+    print(f'Song DB loaded from backup. Reason: {verbose}')
     shutil.copy(tmp_path, sdb_path)
 
 
@@ -114,7 +114,7 @@ def pop_song_db(uri: str) -> None:
 
 
 def debug_song_db() -> None:
-    repair_sdb(verbose='debug_song_db was called')
+    # repair_sdb(verbose='debug_song_db was called')
 
     # Time a full load
     then = now()
@@ -160,13 +160,17 @@ def debug_song_db() -> None:
                 print(record)
                 if input_is('Item', look_closer):
                     do_pop = input(
-                        '>>> Do you want to permanently delete this item '
-                        'from the pending records? Yes / [No]  ')
-                    if input_is('Yes', do_pop):
+                        '>>> Do you want to permanently delete or clear this '
+                        'item from the song data base? Delete / Clear / [No]  ')
+                    if input_is('Delete', do_pop):
                         pop_song_db(uri)
-                        print('Deleted.')
+                        msg = 'deleted'
+                    elif input_is('Clear', do_pop):
+                        set_song_db(uri)
+                        msg = 'cleared'
                     else:
-                        print('Not deleted.')
+                        msg = 'untouched'
+                    print(f'Song data base entry {msg}.')
 
 
 if __name__ == '__main__':
