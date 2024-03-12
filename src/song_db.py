@@ -114,7 +114,8 @@ def pop_song_db(uri: str) -> None:
 
 
 def debug_song_db() -> None:
-    # repair_sdb(verbose='debug_song_db was called')
+    if input_is('Yes', input('>>> Repair song database? Yes/[No]  ')):
+        repair_sdb(verbose='debug_song_db was called')
 
     # Time a full load
     then = now()
