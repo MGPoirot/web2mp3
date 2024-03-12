@@ -303,7 +303,7 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
 
             # Redirect stdout to log file if not verbose
             if not verbose:
-                sys.stdout = open(logger_path.replace('json', 'txt'), "w")
+                sys.stdout = open(str(logger_path).replace('json', 'txt'), "w")
             log_obj = Logger(logger_path, verbose=True)
             download_track(task, logger=log_obj)
             task_tmp.rm()
