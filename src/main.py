@@ -118,21 +118,22 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
     logger(f'Searching {platform.name.capitalize()} for:'.ljust(ps), f'"{qstr}"')
     items = platform.search(search_query, **kwargs)
 
-
-
-    # Sort the item list by relative durations
-    rel_ts = platform.t_extractor(*items, query_duration=query.duration)
-    if sort_by == 'duration' and None not in rel_ts:
-        sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
-            rel_ts))))
-        items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
-        # Sort the items, in case we need to get them by index
-        items, rel_ts = zip(*items_and_durations)
-
     # Check if one of our search results matches our query
     if not any(items):
+        rel_ts = []
         logger(f'No results found for {accept_origin} search.')
-        default_response = None
+        if default_response is not None:
+            default_response = 'Abort'
+    else:
+        # Sort the item list by relative durations
+        rel_ts = platform.t_extractor(*items, query_duration=query.duration)
+        if sort_by == 'duration' and None not in rel_ts:
+            sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
+                rel_ts))))
+            items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
+            # Sort the items, in case we need to get them by index
+            items, rel_ts = zip(*items_and_durations)
+
     for n, (item, rel_t) in enumerate(zip(items, rel_ts), 1):
         # Extract information from our query results
         if platform.name == 'spotify':
@@ -168,7 +169,6 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
                                          'duration': item_duration})
             break
 
-
     # Without clear match provide the user with options:
     if matched_obj is None:
         no_match_status = f'No clear {platform.name} match. ' + '{}:'
@@ -184,6 +184,7 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
                                              for i in range(len(items))]) + '/'
                     default = '1'
                 else:
+                    item_options = ''
                     default = 'Retry'
                 prompt = f'>>> {item_options}Retry/Manual/Abort/Change market:'
                 prompt.replace(default, f'[{default}]')
