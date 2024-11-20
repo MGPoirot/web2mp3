@@ -152,7 +152,8 @@ def debug() -> None:
         return
 
     # Process the user request to inspect URIs
-    for i, path in enumerate(uris_to_do):
+    for i, uri in enumerate(uris_to_do):
+        path = uri2path(uri)
 
         # Display item details
         print(f'{str(i + 1).rjust(3)}/{n_to_do}:', path.name)
