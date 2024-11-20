@@ -132,7 +132,7 @@ class Logger:
             self.create_new()
         else:
             content = json_in(self.path)
-            if content is not None
+            if content is not None:
                 last_id = [k.split('-')[0] for k in content.keys()][0]
                 self.id = int(last_id) + 1
         self(datetime.now().strftime("%Y-%m-%d %H:%M"))
