@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 from initialize import spotify_api
 from utils import timeout_handler
 from tag_manager import get_track_tags
-import pandas as pd
-from modules import youtube
 from spotipy.exceptions import SpotifyException
 import requests
-
+from typing import Tuple, List
 
 # PSA: strictly define all substring patterns to avoid conflicts
 # the name of the module
@@ -15,7 +15,7 @@ name = 'spotify'
 target = 'tags'
 
 # patterns to match in a URL
-url_patterns = ['open.spotify.com', 'spotify.link', 'spotify:', ]
+url_patterns = ['open.spotify.com', 'spotify.link', 'spotify.', ]
 
 # substring to recognize a playlist object
 playlist_identifier = '/playlist/'
@@ -73,12 +73,9 @@ def album_handler(url: str) -> list:
     return general_handler(url, spotify_api.album)
 
 
-def sort_lookup(query: pd.Series, matched_obj: pd.Series):
+def sort_lookup(query: dict, matched_obj: dict | None) -> Tuple[str | None, dict | None]:
     # Sorts the mp3 URL and track tags
-    if matched_obj is None:
-        track_uri = None
-    else:
-        track_uri = youtube.url2uri(matched_obj.track_url)
+    track_uri = None if matched_obj is None else matched_obj['track_uri']
     track_tags = query
     return track_uri, track_tags
 
@@ -89,30 +86,30 @@ def get_search_platform():
     return youtube
 
 
-def get_description(track_url: str, **kwargs) -> pd.Series:
+def item2desc(item: dict) -> Tuple[str]:
+    item = get_track_tags(item, do_light=True)
+    return item['title'], item['artist']
+
+
+def get_description(track_url: str, **kwargs) -> dict:
     market = kwargs['market']
     # Gets information about the track that will be used as query for matching
     item = timeout_handler(spotify_api.track, track_url, market=market)
-    track_tags = get_track_tags(item, do_light=False)
-    query = track_tags
-    return query
+    item['title'] = item.pop('name')
+    return get_track_tags(item)
 
 
 def url2uri(url: str, raw=False) -> str:
     uri = url.split('?')[0].split('/track/')[-1].split('/playlist/')[-1]
-    domain = '' if raw else 'spotify:'
+    domain = '' if raw else 'spotify.'
     return f'{domain}{uri}'
 
 
-def uri2url(uri: str) -> str:
-    try:
-        return f"https://open.spotify.com/track/{uri.split(':')[-1]}"
-    except AttributeError:
-        # NoneType object has no attribute split
-        return None
+def uri2url(uri: str) -> str | None:
+    return f"https://open.spotify.com/track/{uri.split('.')[-1]}"
 
 
-def search(search_query, **kwargs):
+def search(search_query, **kwargs) -> List[dict]:
     search_limit = kwargs['search_limit']
     market = kwargs['market']
     results = spotify_api.search(
@@ -122,10 +119,13 @@ def search(search_query, **kwargs):
         type='track'
     )
     items = results['tracks']['items']
+
+    # Rename track name to track title
+    for item in items:
+        item['title'] = item.pop('name')
     return items
 
 
 def t_extractor(*items, query_duration=1) -> list:
     # Returns duration of a track from a list of tracks as float
-    res = [i['duration_ms'] / 1000 / query_duration for i in items]
-    return res
+    return [i['duration_ms'] / 1000 / query_duration for i in items]

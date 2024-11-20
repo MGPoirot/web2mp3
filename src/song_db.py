@@ -1,148 +1,105 @@
-from initialize import song_db_file
+from __future__ import annotations
+
+from initialize import song_db_path
 from utils import input_is
-import pandas as pd
-import os
-import shutil
-from pandas import Int64Dtype as PdInt
-from pandas import BooleanDtype as PdBool
-from pandas import StringDtype as PdStr
-from pandas import Float32Dtype as PdFlt
-from time import time as now
-from time import sleep
+from utils import json_out, json_in
+from typing import List
+from pathlib import Path
+import json
+
 
 song_db_template = {
-    'album': PdStr(),
-    'album_artist': PdStr(),
-    'artist': PdStr(),
-    'bpm': PdInt(),
-    'cover': PdStr(),
-    'disc_max': PdInt(),
-    'disc_num': PdInt(),
-    'duration': PdFlt(),
-    'genre': PdStr(),
-    'internet_radio_url': PdStr(),
-    'release_date': PdStr(),
-    'recording_date': PdStr(),
-    'tagging_date': PdStr(),
-    'title': PdStr(),
-    'track_max': PdInt(),
-    'track_num': PdInt(),
-    '_kwarg_avoid_duplicates': PdBool(),
-    '_kwarg_do_overwrite': PdBool(),
-    '_kwarg_max_daemons': PdInt(),
-    '_kwarg_print_space': PdInt(),
-    '_kwarg_quality': PdInt(),
-    '_kwarg_verbose': PdBool(),
-    '_kwarg_verbose_continuous': PdBool(),
+    'tags': {
+        'album': str,
+        'album_artist': str,
+        'artist': str,
+        'bpm': int,
+        'cover': str,
+        'disc_max': int,
+        'disc_num': int,
+        'duration': float,
+        'genre': str,
+        'internet_radio_url': str,
+        'release_date': str,
+        'recording_date': str,
+        'tagging_date': str,
+        'title': str,
+        'track_max': int,
+        'track_num': int,
+    },
+    'settings': {
+        'avoid_duplicates': bool,
+        'do_overwrite': bool,
+        'max_daemons': int,
+        'print_space': int,
+        'quality': int,
+        'verbose': bool,
+        'verbose_continuous': bool,
+    },
 }
 
-sdb_path = song_db_file.format('')
-tmp_path = song_db_file.format('.')
+def uri2path(uri: str | Path) -> Path:
+    path = uri if isinstance(uri, Path) else song_db_path / uri
+    return path
 
 
-def repair_sdb(verbose='') -> None:
-    # Creates a song database from a copy
-    print(f'Song DB loaded from backup. Reason: {verbose}')
-    shutil.copy(tmp_path, sdb_path)
+def sdb_has_uri(uri: str | Path) -> bool:
+    return uri2path(uri).is_file()
 
 
-def get_song_db(columns=None) -> pd.DataFrame:
-    """
-    Load the Song Database (song_db) file, or
-    create one if it does not exist.
-    The song_db is used to store song properties for them to be processed and
-    URLs of past processes in order to avoid processing them twice.
-    """
-
-    # Load the song database if it exists
-    if not os.path.isfile(sdb_path):
-        sdb = pd.DataFrame(columns=list(song_db_template)).astype(
-            song_db_template)
-        sdb.to_parquet(sdb_path)
-    try:
-        # Test if the file can be loaded
-        sdb = pd.read_parquet(sdb_path, columns=columns)
-    except Exception as e:  # OSError, but also cramjam.DecompressionError
-        repair_sdb(verbose=str(e))
-        sleep(0.1)
-        return get_song_db(columns=columns)
-
-    # Every minute we also store a backup
-    if all([c in sdb for c in song_db_template]):
-        if not os.path.isfile(tmp_path) or now() - os.stat(
-                sdb_path).st_mtime > 60:
-            sdb.to_parquet(tmp_path)
-    return sdb
+# def sdb_get_uris() -> List[str]:
+#     return [f.name for f in song_db_path.glob('*')]
 
 
-def set_song_db(uri: str, value=None, overwrite=True) -> None:
+def pretty_print(uri: str | Path) -> None:
+    print(json.dumps(sdb_read(uri2path(uri)), indent=4, sort_keys=True))
+
+
+def sdb_read(uri: str | Path) -> dict:
+    path = uri2path(uri)
+    return None if is_empty(path) else json_in(path)
+
+
+def is_empty(path: Path) -> bool:
+    return path.stat().st_size == 0
+
+
+def sdb_to_do() -> List[str]:
+    # This is a bit of a slow operation which I could improve in the future,
+    # But it is not called frequently.
+    # Returns a list of uris
+    return [f.name for f in song_db_path.rglob("*") if not is_empty(f)]
+
+
+def sdb_write(uri: str | Path | None, tags=None, settings=None, overwrite=True) -> None:
     """ Set a value to a key (=short URL) in the song database """
-    if uri is None:
-        # This can happen when the track_url is
-        # None because tags were created manually.
+    if uri is None:  # Happens for manual entries
         return
 
-    if not overwrite and uri in get_song_db(columns=[]).index:
+    path = uri2path(uri)
+    if not overwrite and sdb_has_uri(path):
         return
-
-    # Append the uri-value pair to the data frame.
-    if value is None:
-        # If no value is provided, create an empty DataFrame
-        entry = pd.DataFrame(
-            columns=list(song_db_template),
-            index=[uri]
-        ).astype(song_db_template)
-    else:
-        # Convert the pd.Series to a pd.DataFrame
-        entry = value.to_frame(uri).T.astype(song_db_template)
-
-    # Add entry and avoid duplicates
-    sdb = get_song_db()
-    sdb = pd.concat([sdb, entry])
-    sdb = sdb[~sdb.index.duplicated(keep='last')]
-    sdb.to_parquet(song_db_file.format(''))
-    return
+    payload = {'tags': tags, 'settings': settings}
+    json_out(payload, path) if any(payload.values()) else open(path, 'w').close()
 
 
-def pop_song_db(uri: str) -> None:
-    """ remove entry from song database"""
-    sdb = get_song_db()
-    item = sdb.loc[uri]
-    print(
-        f'Deleted song database entry "{item.title}" by "{item.album_artist}" ({uri})')
-    get_song_db().drop(uri).to_parquet(song_db_file.format(''))
+def pop_song_db(uri: str | Path) -> None:
+    uri2path(uri).unlink()
+    print(f'Deleted song database file "{uri}"')
 
 
 def debug_song_db() -> None:
-    if input_is('Yes', input('>>> Repair song database? Yes/[No]  ')):
-        repair_sdb(verbose='debug_song_db was called')
-
-    # Time a full load
-    then = now()
-    sdb = get_song_db()
-    full_duration = now() - then
-
-    # Time an index load
-    then = now()
-    _ = get_song_db(columns=[])
-    shrt_duration = now() - then
-
     # Get statistics of the song database
-    n_records = len(sdb)
-    to_do = sdb.title.notna()
-    n_to_do = to_do.sum()
+    n_records = len(list(song_db_path.glob('*')))
+    to_do = sdb_to_do()
+    n_to_do = len(to_do)
     n_empty_records = n_records - n_to_do
-    backup_exists = os.path.isfile(tmp_path)
-    backup_exists = 'exists' if backup_exists else 'does not exist'
 
     # Structure the meta information to print
     info = [
         ('number of processed records', n_empty_records),
         ('number of unprocessed records', n_to_do),
-        ('Index loading time', f'{shrt_duration:.3f}s'),
-        ('Full loading time', f'{full_duration:.3f}s'),
-        ('location', sdb_path),
-        ('backup', backup_exists)
+        ('location', song_db_path),
     ]
 
     # Print header and the song dat base meta information
@@ -156,18 +113,18 @@ def debug_song_db() -> None:
         look_closer = input('>>> Do you want to see a list of items, '
                             'or check per item? List / Item / [No]  ')
         if input_is('List', look_closer) or input_is('Item', look_closer):
-            for i, (uri, record) in enumerate(sdb[to_do].iterrows()):
-                print(f'{str(i + 1).rjust(3)}/{n_to_do}:', uri)
-                print(record)
+            for i, path in enumerate(to_do):
+                print(f'{str(i + 1).rjust(3)}/{n_to_do}:', path.name)
+                pretty_print(path)
                 if input_is('Item', look_closer):
                     do_pop = input(
                         '>>> Do you want to permanently delete or clear this '
                         'item from the song data base? Delete / Clear / [No]  ')
                     if input_is('Delete', do_pop):
-                        pop_song_db(uri)
+                        pop_song_db(path)
                         msg = 'deleted'
                     elif input_is('Clear', do_pop):
-                        set_song_db(uri)
+                        sdb_write(path)
                         msg = 'cleared'
                     else:
                         msg = 'untouched'

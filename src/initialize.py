@@ -139,7 +139,7 @@ def run_setup_wizard():
                               sfy_validator, None),
         'SPOTIPY_CLIENT_SECRET': ('Spotify client secret',
                                   sfy_validator, None),
-        'SPOTIFY_MARKET': ('Spotify market',
+        'LOCATION': ('Location',
                            market_validator, market_default)
     }
     print("                         , - ~ ~ ~ - ,                           \n"
@@ -185,7 +185,7 @@ dotenv.load_dotenv(ENV_PATH)
 
 # Check if setup file is complete, if not, resume setup
 env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', \
-    'SPOTIPY_CLIENT_SECRET', 'SPOTIFY_MARKET'
+    'SPOTIPY_CLIENT_SECRET', 'LOCATION'
 env_exists = [True if os.environ.get(v) else False for v in env_keys]
 if not all(env_exists):
     print("Incomplete environment file found. Resuming setup.")
@@ -194,13 +194,14 @@ dotenv.load_dotenv(ENV_PATH)
 
 # Define paths from config env
 music_dir = Path(os.environ.get('MUSIC_DIR'))
-default_market = os.environ.get('SPOTIFY_MARKET')
+default_market = os.environ.get('LOCATION')
 
 # Maybe I will replace the use of string with Path objects here as well in the
 # future, but currently, nothing is broken so no need to fix anything.
 daemon_dir = home_dir / '.daemons' / 'daemon-{}.tmp'
 log_dir = home_dir / '.logs' / '{}.json'
 song_db_file = home_dir / '{}song_db.pqt'
+song_db_path = home_dir / 'song_db'
 
 # Check if a COOKIE_FILE is set
 if not os.environ.get('COOKIE_FILE'):

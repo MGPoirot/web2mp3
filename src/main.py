@@ -1,50 +1,58 @@
+from __future__ import annotations
+
 import sys
 sys.path.append('src')
 from initialize import log_dir, default_market
-from utils import Logger, input_is, get_url_platform, shorten_url, hms2s, \
+from utils import Logger, input_is, get_url_platform, shorten_url, \
     get_path_components, track_exists, sanitize_track_name, strip_url, flatten
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
-import pandas as pd
 import re
-from song_db import set_song_db, get_song_db, song_db_template
+from song_db import sdb_write, sdb_has_uri
 from download_daemon import start_daemons
 from unidecode import unidecode
 import click
 from click import Choice
+from typing import List
+from difflib import SequenceMatcher
 
 
-def is_clear_match(track_name: str, artist_name: str, title: str) -> bool:
+def similar(a, b):
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+def compare_meta(*args) -> List[bool]:
     """
     Checks if the given track name and artist name are a clear match for a
     given title (case-, diacritic- and non-alphanumeric insensitive).
 
-    :param track_name: The name of the track to be checked.
-    :type track_name: str
-    :param artist_name: The name of the artist to be checked.
-    :type artist_name: str
-    :param title: The title to check against.
-    :type title:
-
+    :param args consists of pairs of values to be checked agaist each other
     :return: True if both the track name and artist name can be found in the
     title, otherwise False.
     :rtype: bool
 
     Example:
-    > is_clear_match("Lose You To Love Me", "Selena Gomez",
-     "selena gomez - Lose You To Love Me (Official Music Video)")
+    > compare_meta(
+    >     "Lose You To Love Me", "Lose You To Love Me (Official Music Video)",
+    >     "Selena Gomez", "selena gomez",
+    > )
     True
     """
+    if len(args) % 2:
+        raise ValueError('Incomplete pair in values to compare.')
+
+    # Remove all non letter characters
     rip = lambda arg: re.sub(r'\W+', '', unidecode(arg.lower()))
-    artist_name = artist_name.lower()
-    artist_name = artist_name[4:] if artist_name[:4] == 'the ' else artist_name
-    track_name = sanitize_track_name(track_name)
-    return rip(track_name) in rip(title) \
-        and rip(artist_name) in rip(title)
+
+    matches = []
+    for a, b in zip(*[args[0::2]] + [args[1::2]]):
+        a_s = sanitize_track_name(a)
+        b_s = sanitize_track_name(b)
+        matches.append(rip(a_s) in rip(b_s) or rip(b_s) in rip(a_s))
+    return matches
 
 
-def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
-           **kwargs) -> pd.Series:
+def lookup(query: dict, platform, logger: callable = print, sort_by='none',
+           **kwargs) -> dict | None:
     """
     Search for a track on a specified platform and return the best match.
 
@@ -59,6 +67,10 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
     :type platform: module
 
     :param logger: A logging object for printing information and errors.
+
+    :param sort_by: The name of the method by which results are sorted. The only
+        implemented method is duration, but in the future, more fine grained
+        methods could easily be implemented
 
     :param duration_tolerance: The percentage difference between the
         duration of the search result and the query duration that is still
@@ -91,86 +103,81 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
     default_response = kwargs['response']
     duration_tolerance = kwargs['tolerance']
     market = kwargs['market']
-    matched_obj = None  # This is what we will return
+    match = None  # This is what we will return
 
     # Sanitize default response
     accept_origin = 'the user' if default_response is None else 'default'
 
-    # Define what track information we have already received
-    if platform.name == 'spotify':
-        title = query.video_title
-        search_query = title
-    elif platform.name == 'youtube':
-        name = query.title
-        artist = query.artist
-        if hasattr(query, 'video_title'):  # For manual retries
-            search_query = query.video_title
-        else:
-            # # Uses the Spotify API for formatting,
-            # # I have not found this to be beneficial
-            # search_query = f'track:{name} artist:{artist}'
-            search_query = f'{name} {artist}'
-    else:
-        raise ValueError(f'Unknown platform "{platform}"')
-
     # Query the desired platform
+    search_query = f'{query["title"]} {query["artist"]}'
     qstr = search_query if len(search_query) < 53 else search_query[:50] + '...'
-    logger(f'Searching {platform.name.capitalize()} for:'.ljust(ps), f'"{qstr}"')
+    logger(f'Searching {platform.name.capitalize()} for:'.ljust(ps), f'"{qstr}"'.ljust(50), "srt% tim% sim%")
     items = platform.search(search_query, **kwargs)
 
     # Check if one of our search results matches our query
     if not any(items):
-        rel_ts = []
+        sorted_properies = []
         logger(f'No results found for {accept_origin} search.')
         if default_response is not None:
             default_response = 'Abort'
     else:
-        # Sort the item list by relative durations
-        rel_ts = platform.t_extractor(*items, query_duration=query.duration)
-        if sort_by == 'duration' and None not in rel_ts:
-            sort_obj = sorted(zip([abs(d - 1) for d in rel_ts], rel_ts, range(len(
-                rel_ts))))
-            items_and_durations = [(items[idx], rel_t) for _, rel_t, idx in sort_obj]
-            # Sort the items, in case we need to get them by index
-            items, rel_ts = zip(*items_and_durations)
+        # Define matching properties
+        relative_duration = platform.t_extractor(*items, query_duration=query['duration'])
+        duration_similarity = [1 - abs(d - 1) for d in relative_duration]
+        # When we use YouTube as source...
+        # title_similarity = [similar(i['name'], query['title']) for i in items]
+        title_similarity = [similar(i['title'], query['title']) for i in items]
+        combination = [d_sim * t_sim for d_sim, t_sim in zip(duration_similarity, title_similarity)]
+        original_sorting = [i/(len(items)-1) for i in range(len(items))][::-1]
 
-    for n, (item, rel_t) in enumerate(zip(items, rel_ts), 1):
-        # Extract information from our query results
-        if platform.name == 'spotify':
-            item_tags = get_track_tags(item, do_light=True)
-            name = item_tags.title
-            artist = item_tags.album_artist
-            item_desc = f'{name} - {artist}'
-        elif platform.name == 'youtube':
-            item_desc = item['title']
-            title = item['title']
-        else:
-            logger(f'Unknown platform "{platform}"')
-            break
+        # Specify the key to be sorted by
+        sort_key = {
+            'none': original_sorting,
+            'duration': duration_similarity,
+            'title': title_similarity,
+            'combination': combination,
+        }[sort_by]
+
+        # Replace Nones
+        sort_key = [0 if v is None else v for v in sort_key]
+        sorted_properies = sorted(zip(
+            sort_key,
+            items,
+            relative_duration,
+            title_similarity,
+        ), reverse=True)
+
+    for n, (key, item, duration, similarity) in enumerate(sorted_properies, 1):
+        # Extract information from our query result items
+        item_title, item_artist = platform.item2desc(item)
+        item_desc = f'{item_title} - {item_artist}'
 
         # Print a synopsis of our search result
-        rel_t_str = f'{str(rel_t)}%' if rel_t is None else f'{rel_t:.0%}'
-        logger(''.rjust(ps), f'{n}) {item_desc[:47].ljust(47)} {rel_t_str}')
+
+        sim_strs = ' '.join([f'{v:.0%}'.rjust(4) for v in [key, duration, similarity]])
+        key_str = f'{str(key)}%' if key is None else sim_strs
+        logger(''.rjust(ps), f'{n}) {item_desc[:46].ljust(47)} {key_str}')
 
         # Check how the duration matches up with what we are looking for
-        is_duration_match = None if rel_t is None else \
-                abs(rel_t - 1) < duration_tolerance
+        is_duration_match = None if duration is None else \
+                abs(key - 1) < duration_tolerance
+
+        is_meta_match = compare_meta(item_title, query["title"], item_artist, query["artist"])
 
         # Check if the search result is a match
-        if is_clear_match(name, artist, title) and is_duration_match:
-            logger(f'Clear {platform.name} match:'.ljust(ps),
-                   f'{item_desc}')
+        if all(is_meta_match) and is_duration_match:
+            logger(f'Clear {platform.name} match:'.ljust(ps), f'{item_desc}')
             if platform.name == 'spotify':
-                matched_obj = get_track_tags(item, do_light=False)
+                match = get_track_tags(item)
             else:
-                item_duration = platform.t_extractor(item)[0]
-                matched_obj = pd.Series({'track_url': item['link'],
-                                         'video_title': item_desc,
-                                         'duration': item_duration})
+                match = {'track_uri': 'youtube.' + item['videoId'],
+                         'title': item['title'],
+                         'artist': item['artists'][0]['name'],
+                         'duration': item['duration_seconds']}
             break
 
     # Without clear match provide the user with options:
-    if matched_obj is None:
+    if match is None:
         no_match_status = f'No clear {platform.name} match. ' + '{}:'
         # Set appropriate response
         if default_response is not None:
@@ -178,17 +185,16 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
             logger(no_match_status.format(f'Default to {proceed}'))
         else:
             logger(no_match_status.format('Select'))
-            if default_response is None:
-                if any(items):
-                    item_options = '/'.join([str(i + 1)
-                                             for i in range(len(items))]) + '/'
-                    default = '1'
-                else:
-                    item_options = ''
-                    default = 'Retry'
-                prompt = f'>>> {item_options}Retry/Manual/Abort/Change market:'
-                prompt.replace(default, f'[{default}]')
-                proceed = input(prompt) or default
+            if any(items):
+                item_options = '/'.join([str(i + 1)
+                                         for i in range(len(items))]) + '/'
+                default = '1'
+            else:
+                item_options = ''
+                default = 'Retry'
+            prompt = f'>>> {item_options}Retry/Manual/Abort/Change market:'
+            prompt.replace(default, f'[{default}]')
+            proceed = input(prompt) or default
 
         # Take action according to proceed method
         if proceed.isdigit():
@@ -196,19 +202,17 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
             if idx > len(items) or idx < 0:
                 logger(f'Invalid index {idx + 1} for {len(items)} options.')
             else:
-                selected_item = items[idx]
-
                 if platform.name == 'spotify':
-                    matched_obj = get_track_tags(track_item=selected_item)
-                    item_desc = f'{matched_obj.title} - ' \
-                                f'{matched_obj.album_artist}'
+                    match = get_track_tags(items[idx])
                 elif platform.name == 'youtube':
-                    item = selected_item
-                    item_desc = item['title']
-                    item_duration = hms2s(item['duration'])
-                    matched_obj = pd.Series({'track_url': item['link'],
-                                             'video_title': item_desc,
-                                             'duration': item_duration})
+                    match = {
+                        'track_uri': 'youtube.' + items[idx]['videoId'],
+                        'album_artist': items[idx]['artists'][0]['name'],
+                        'artist': platform.get_artist(items[idx]),
+                        'title': items[idx]['title'],
+                        'duration': items[idx]['duration_seconds'],
+                    }
+                item_desc = f'{match["title"]} - {match["artist"]}'
                 logger(f'Match accepted by {accept_origin}: '
                        f''.ljust(ps), item_desc)
 
@@ -216,20 +220,21 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
             logger(f'Provide new info for {platform.name} query: ')
             search_query = input('>>> Track name and artist? '
                                  ''.ljust(ps))
-            query.video_title = search_query
+            query['title'] = search_query
+            query['artist'] = ''
 
         elif input_is('Manual', proceed):
             if platform.name == 'spotify':
                 logger('Provide manual track info: ')
-                matched_obj = manual_track_tags(market=market,
-                                                duration=query.duration)
-                matched_obj['internet_radio_url'] = query['track_url']
+                match = manual_track_tags(market=market,
+                                          duration=query['duration'])
+                match['internet_radio_url'] = 'manual'
             elif platform.name == 'youtube':
-                matched_obj = input('>>> Provide YouTube URL: '
+                match = input('>>> Provide YouTube URL: '
                                     ''.ljust(ps)).split('&')[0]
 
         elif input_is('Abort', proceed):
-            matched_obj = False
+            match = False
 
         elif input_is('Change market', proceed):
             market = input('>>> Market code?'.ljust(ps)) or None
@@ -239,17 +244,17 @@ def lookup(query: pd.Series, platform, logger=print, sort_by='duration',
             logger(f'Invalid input "{proceed}"')
 
     # Give it another try with our updated arguments
-    if matched_obj is None and default_response is None:
-        matched_obj = lookup(
+    if match is None and default_response is None:
+        match = lookup(
             query=query,
             platform=platform,
             logger=logger,
             **kwargs,
         )
-    return matched_obj
+    return match
 
 
-def file_from_tags_exists(track_tags, logger=print, avoid_duplicates=True):
+def file_from_tags_exists(track_tags: dict | None, logger: callable = print, avoid_duplicates=True):
     if avoid_duplicates and track_tags is not None:
         artist_p, _, track_p = get_path_components(track_tags)
         if any(track_exists(artist_p, track_p, logger=logger)):
@@ -257,7 +262,7 @@ def file_from_tags_exists(track_tags, logger=print, avoid_duplicates=True):
     return False
 
 
-def do_match(track_url, source, logger=print, **kwargs):
+def do_match(track_url, source, logger: callable = print, **kwargs):
     """
         The do_match function handles the heavy lifting of the matching process,
         it is wrapped by match_audio_with_tags to enable harmonized handling of
@@ -271,7 +276,7 @@ def do_match(track_url, source, logger=print, **kwargs):
     track_uri = source.url2uri(track_url)
 
     # Skip in case the URL is already in the database
-    if track_uri in get_song_db(columns=[]).index and not do_overwrite:
+    if sdb_has_uri(track_uri) and not do_overwrite:
         return f'Skipped: TrackExists "{track_uri}"'
 
     # Get a description of the object to use for matching
@@ -287,11 +292,13 @@ def do_match(track_url, source, logger=print, **kwargs):
     if file_from_tags_exists(track_tags, logger, avoid_duplicates):
         return 'Skipped: FileExists'
 
-    # If the query contains this field it cannot be empty or zero.
-    req_fields = ['duration', 'title', 'album', 'artist']
-    if any([not bool(query[c]) for c in req_fields if c in query]):
-        set_song_db(track_uri)
-        return f'Failed: URL object is empty "{track_uri}"'
+    # Spotify's metadata of certain fields cannot be incomplete
+    if source.name == 'spotify':
+        req_fields = ['duration', 'title', 'album', 'artist']
+        if any([not bool(query[c]) for c in req_fields if c in query]):
+            sdb_write(track_uri)
+            return f'Failed: Insufficient meta data to ' \
+                   f'complete the processing of "{track_uri}".'
 
     # Match the object
     search = source.get_search_platform()
@@ -314,20 +321,20 @@ def do_match(track_url, source, logger=print, **kwargs):
 
     #  2) Check if the found tracks is already in the database
     if not do_overwrite:
-        song_db_indices = get_song_db(columns=[]).index
+        # song_db_indices = sdb_get_uris()
         ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
-        errs = [err for err, idx in ctrl if idx in song_db_indices]
+        errs = [err for err, idx in ctrl if sdb_has_uri(idx)]
         if any(errs):
             return ' '.join(['Skipped:', *[f'{e}Exists' for e in errs]])
 
-    # Define download settings
-    kwg_df = pd.Series({k: kwargs[k.replace('_kwarg_', '')]
-                        for k in song_db_template if k[:7] == '_kwarg_'})
-    download_info = pd.concat([track_tags, kwg_df])
-
     # Set song database entries
-    set_song_db(track_uri, download_info, overwrite=True)
-    return f'Success: Download added "{track_uri}"', tags_uri, source_uri, track_uri
+    if tags_uri != 'manual':
+        sdb_write(tags_uri)
+    sdb_write(track_uri, tags=track_tags, settings=kwargs, overwrite=True)
+
+    return f'Success: Download added.\n' \
+           f'    -> TAG   {tags_uri}\n' \
+           f'    -> AUDIO {track_uri}'
 
 
 def match_audio_with_tags(track_url: str, **kwargs):
@@ -352,12 +359,12 @@ def match_audio_with_tags(track_url: str, **kwargs):
     search_result = do_match(track_url, source, logger, **kwargs)
     if isinstance(search_result, tuple):
         status, tags_uri, source_uri, track_uri = search_result
-        set_song_db(tags_uri, overwrite=False)
-        set_song_db(source_uri, overwrite=False)
+        sdb_write(tags_uri, overwrite=False)
+        sdb_write(source_uri, overwrite=False)
     else:
         status = search_result
         track_uri = source.url2uri(track_url)
-    set_song_db(track_uri, overwrite=False)
+    sdb_write(track_uri, overwrite=False)
 
     status = status.split(':')
     logger(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
