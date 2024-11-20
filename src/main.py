@@ -1,24 +1,22 @@
-from __future__ import annotations
-
-import sys
-sys.path.append('src')
-from initialize import log_dir, default_market
+from initialize import log_dir, default_location
 from utils import Logger, input_is, get_url_platform, shorten_url, \
     get_path_components, track_exists, sanitize_track_name, strip_url, flatten
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
 import re
-from song_db import sdb_write, sdb_has_uri
+import index
 from download_daemon import start_daemons
-from unidecode import unidecode
 import click
 from click import Choice
 from typing import List
 from difflib import SequenceMatcher
+import unicodedata
 
 
 def similar(a, b):
+    # Returns a string similarity score between 0 and 1
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
 
 def compare_meta(*args) -> List[bool]:
     """
@@ -41,13 +39,18 @@ def compare_meta(*args) -> List[bool]:
         raise ValueError('Incomplete pair in values to compare.')
 
     # Remove all non letter characters
-    rip = lambda arg: re.sub(r'\W+', '', unidecode(arg.lower()))
+    def strip(arg: str) -> str:
+        # Normalize to remove accents
+        # (NFKD normalization splits characters from diacritics)
+        normalized = unicodedata.normalize('NFKD', arg.lower())
+        # Remove alphanumeric characters
+        return re.sub(r'\W+', '', normalized)
 
     matches = []
     for a, b in zip(*[args[0::2]] + [args[1::2]]):
         a_s = sanitize_track_name(a)
         b_s = sanitize_track_name(b)
-        matches.append(rip(a_s) in rip(b_s) or rip(b_s) in rip(a_s))
+        matches.append(strip(a_s) in strip(b_s) or strip(b_s) in strip(a_s))
     return matches
 
 
@@ -264,9 +267,9 @@ def file_from_tags_exists(track_tags: dict | None, logger: callable = print, avo
 
 def do_match(track_url, source, logger: callable = print, **kwargs):
     """
-        The do_match function handles the heavy lifting of the matching process,
-        it is wrapped by match_audio_with_tags to enable harmonized handling of
-        errors and setting of the song_db.
+        The do_match function handles the heavy lifting of the matching process.
+        It is wrapped by match_audio_with_tags to enable harmonized handling of
+        errors and creation of index items.
     """
     # Get the arguments
     market = kwargs['market']
@@ -276,7 +279,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     track_uri = source.url2uri(track_url)
 
     # Skip in case the URL is already in the database
-    if sdb_has_uri(track_uri) and not do_overwrite:
+    if index.has_uri(track_uri) and not do_overwrite:
         return f'Skipped: TrackExists "{track_uri}"'
 
     # Get a description of the object to use for matching
@@ -296,7 +299,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     if source.name == 'spotify':
         req_fields = ['duration', 'title', 'album', 'artist']
         if any([not bool(query[c]) for c in req_fields if c in query]):
-            sdb_write(track_uri)
+            index.write(track_uri)
             return f'Failed: Insufficient meta data to ' \
                    f'complete the processing of "{track_uri}".'
 
@@ -323,14 +326,14 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     if not do_overwrite:
         # song_db_indices = sdb_get_uris()
         ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
-        errs = [err for err, idx in ctrl if sdb_has_uri(idx)]
+        errs = [err for err, idx in ctrl if index.has_uri(idx)]
         if any(errs):
             return ' '.join(['Skipped:', *[f'{e}Exists' for e in errs]])
 
-    # Set song database entries
+    # Set index items
     if tags_uri != 'manual':
-        sdb_write(tags_uri)
-    sdb_write(track_uri, tags=track_tags, settings=kwargs, overwrite=True)
+        index.write(tags_uri)
+    index.write(track_uri, tags=track_tags, settings=kwargs, overwrite=True)
 
     return f'Success: Download added.\n' \
            f'    -> TAG   {tags_uri}\n' \
@@ -346,7 +349,7 @@ def match_audio_with_tags(track_url: str, **kwargs):
     ps = kwargs['print_space']
 
     # Create a logger object for this URL
-    logger_path = log_dir.format(shorten_url(track_url))
+    logger_path = log_dir.format(shorten_url(track_url), 'json')
     logger = Logger(logger_path, verbose=True)
 
     # Get the source platform module and the platform we need to match it with
@@ -359,12 +362,12 @@ def match_audio_with_tags(track_url: str, **kwargs):
     search_result = do_match(track_url, source, logger, **kwargs)
     if isinstance(search_result, tuple):
         status, tags_uri, source_uri, track_uri = search_result
-        sdb_write(tags_uri, overwrite=False)
-        sdb_write(source_uri, overwrite=False)
+        index.write(tags_uri, overwrite=False)
+        index.write(source_uri, overwrite=False)
     else:
         status = search_result
         track_uri = source.url2uri(track_url)
-    sdb_write(track_uri, overwrite=False)
+    index.write(track_uri, overwrite=False)
 
     status = status.split(':')
     logger(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
@@ -460,7 +463,7 @@ def main(**kwargs):
               help="When verbose, to continue after 1 item.")
 @click.option("-t", "--tolerance", default=0.10,
               help="Duration difference threshold.")
-@click.option("-m", "--market", default=default_market,
+@click.option("-m", "--market", default=default_location,
               help="Spotify API market.")
 @click.option("-l", "--search_limit", default=5,
               help="Tracks to check for match.")

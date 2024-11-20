@@ -76,7 +76,7 @@ Web2mp3 aims to be a scalable tool. To this end, three features are paramount:
 
 **1. Input Sources**
 
-Both YouTube URLs as Spotify URLs are accepted. My advise is to primarily use 
+Both YouTube URLs as Spotify URLs are accepted. My advice is to primarily use 
 Spotify URLs, since YouTube URLs can include video clip chatter. SoundCloud 
 support is in development, to cover audio that is not available through YouTube. 
 
@@ -93,7 +93,7 @@ of especial benefit to avoid downloading audio with video clip intro chatter.
 
 **3. Minimal user input**
 
-In matching the audio the meta data, web2mp3 automatically compares several
+In matching the audio the metadata, web2mp3 automatically compares several
 items and selects the most appropriate. When no appropriate match could be 
 found the user is requested for input. The options are:
 * `1-5` Select any item from the list
@@ -111,8 +111,8 @@ be added during the first run.
 **4. Concise managing of downloads**
 
 To speed up the downloading process, Web2mp3 stores a download history in the
-Song Database (`song_db`). To avoid these checks, the `--do_overwrite` flag 
-can be passed.
+index (`/src/index`). To avoid these checks, the `--do_overwrite` flag can be 
+passed.
 As a final check before downloading , Web2mp3 checks if the song to be 
 downloaded does not already exist in the music directory. It does this by
 checking if the artist already has a song downloaded containing this song name.
@@ -147,9 +147,16 @@ Music
         └───folder.jpg
 ```
 
-## Backbone
+## Dependencies
+Web2MP3 was tested on Windows and Linux. It requires minimal core dependencies. Starts with `ytmusicapi` to identify the video with the given URL. Then uses `spotipy` to get metadata. After which it uses `yt-dlp` to download audio, and finally `eye3d` for handling mp3 tags. `pytube` is optional to get a list of URLS from a playlist. See `requirements.txt`. Tested on Linux and Windows. In short:
+* Python `v3.10`: not compatible with lower versions because I like the clarity of type union type hinting (`str | Path`)
+* `eyed3`: Reading and writing MP3 tags 
+* `pytube`: Reading playlists of YouTube resources
+* `requests`: Unwrapping shortened Spotify URLs
+* `spotipy`: Reading metadata through the Spotify API 
+* `yt-dlp`: Downloading YouTube resources
+* `ytmusicapi`: Searching for YouTube resources
 
-Starts with `youtube_search_python` to identify the video with the given URL. Then uses `spotipy` to get meta data. After which it uses `yt-dlp` to download audio, and finally `eye3d` for handling mp3 tags. `pytube` is optional to get a list of URLS from a playlist. See `requirements.txt`. Tested on Linux and Windows.
 
 ## main.py Command line arguments
 An important part of this tool is to match the audio to Spotify meta-data, or
@@ -215,7 +222,7 @@ By performing these tasks in the background, the semi-supervised process of
 matching audio with meta-data is not interrupted.
 
 After each match, songs are stored in the song database (SDB). DAEMONs will
-attempt to process any unprocessed song the the SDB and finish when there is
+attempt to process any unprocessed items from the index and finish when there is
 nothing left. Since DAEMONs are headless by default, they store logbooks to the
 `.log` directory.
 

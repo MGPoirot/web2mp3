@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from initialize import spotify_api
 from utils import timeout_handler
 from tag_manager import get_track_tags
