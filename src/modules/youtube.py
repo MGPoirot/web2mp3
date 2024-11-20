@@ -163,7 +163,8 @@ def audio_download(youtube_url: str, audio_fname: str, quality:int,
     }
     if cookie_file:
         if os.path.isfile(cookie_file):
-            ydl_opts.update({'cookiefile': cookie_file})
+            print('Cookie file found:', cookie_file)
+            ydl_opts.update({'cookiefile': str(cookie_file)})
         else:
             logger('Provided cookiefile does noet exist. Ignored.')
     # Attempt download
