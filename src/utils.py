@@ -112,7 +112,7 @@ class Logger:
 
         Args:
             :param full_path: The full path to the log file.
-            :type full_path: str or NoneType
+            :type full_path: Path or NoneType
             :param verbose: Whether to print log messages to console as well.
             :type verbose: bool
 
@@ -127,8 +127,8 @@ class Logger:
             sys.exit()
         self.verbose = verbose  # Always print if true
 
+        self.id = 0
         if not self.path.is_file():
-            self.id = 0
             self.create_new()
         else:
             content = json_in(self.path)
