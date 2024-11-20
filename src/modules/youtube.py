@@ -189,10 +189,6 @@ def search(search_query, **kwargs) -> List[dict]:
 
 def t_extractor(*items, query_duration=1) -> List[float]:
     # Returns duration of a track from a list of tracks as float
-    results = []
-    for item in items:
-        try:
-            results.append(item['duration_seconds'] / query_duration)
-        except KeyError:
-            breakpoint()
-    return results
+    res = [i['duration_seconds'] if 'duration_seconds' in i else None for i in items]
+    res = [i / query_duration if i is not None else 0 for i in res]
+    return res
