@@ -131,6 +131,7 @@ class Logger:
             self.id = 0
             self.create_new()
         else:
+            breakpoint()
             last_id = [k.split('-')[0] for k in json_in(self.path).keys()][0]
             self.id = int(last_id) + 1
         self(datetime.now().strftime("%Y-%m-%d %H:%M"))

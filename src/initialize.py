@@ -36,7 +36,7 @@ def set_in_dot_env(key: str, value: str, overwrite=True) -> None:
     if not ENV_PATH.is_file():
         ENV_PATH.parent.mkdir(exist_ok=True)
         with open(ENV_PATH, 'w') as f:
-            f.write('# ENVIRONMENT FILE CREATED AUTOMATICALLY BY WEB2MP3')
+            f.write('# ENVIRONMENT FILE CREATED AUTOMATICALLY BY WEB2MP3\n')
 
     # Read the data in the environment file
     with open(ENV_PATH, 'r') as f:
@@ -180,6 +180,9 @@ default_location = os.environ.get('LOCATION')
 daemon_dir = home_dir / '.daemons' / 'daemon-{}.tmp'
 log_dir = home_dir / '.logs' / '{}.{}'
 index_path = home_dir / 'src' / 'index'
+
+# Ensure the index path exists
+index_path.mkdir(exist_ok=True)
 
 # Clean up logs on startup
 for log_regex in (log_dir.format('*', 'json'), log_dir.format('*', 'txt')):
