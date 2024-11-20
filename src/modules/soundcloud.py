@@ -1,6 +1,3 @@
-import pandas as pd
-
-
 
 
 
@@ -23,8 +20,8 @@ playlist_identifier = ' '
 album_identifier = ' '
 
 
-def sort_lookup(query: pd.Series, matched_obj: pd.Series):
-    track_url = query.track_url
+def sort_lookup(query: dict, matched_obj: dict):
+    track_url = query['track_url']
     track_tags = matched_obj
     return track_url, track_tags
 

@@ -1,16 +1,19 @@
+from __future__ import annotations
+
 from initialize import music_dir, daemon_dir, log_dir, disp_daemons, glob
 from utils import Logger, get_url_platform, get_path_components, \
     track_exists
 import os
-from song_db import get_song_db, set_song_db
+from song_db import sdb_to_do, sdb_read, sdb_write
 from tag_manager import download_cover_img, set_file_tags
 import atexit
 import sys
 from multiprocessing import Process
 import click
+from pathlib import Path
 
 
-def download_track(track_uri: str, logger=print):
+def download_track(track_uri: str, logger: callable = print):
     """
     This handles downloading audio from YouTube and setting the right mp3 tags.
     :param track_uri:
@@ -20,18 +23,16 @@ def download_track(track_uri: str, logger=print):
     logger('Started download_track')
 
     # Retrieve and extract song properties from the song database
-    download_info = get_song_db().loc[track_uri]
+    download_info = sdb_read(track_uri)
 
     # Unpack kwargs from track tags
-    idx = download_info.index.str.contains('_kwarg_')
-    kwargs = download_info[idx]
-    mp3_tags = download_info[~idx]
-    kwargs = kwargs.rename({k: k.replace('_kwarg_', '') for k in kwargs.index})
+    settings = download_info['settings']
+    mp3_tags = download_info['tags']
 
-    avoid_duplicates = kwargs.avoid_duplicates
-    do_overwrite = kwargs.do_overwrite
-    ps = kwargs.print_space
-    preferred_quality = kwargs.quality
+    avoid_duplicates = settings['avoid_duplicates']
+    do_overwrite = settings['do_overwrite']
+    ps = settings['print_space']
+    preferred_quality = settings['quality']
 
     # Get path components
     artist_p, album_p, track_p = get_path_components(mp3_tags)
@@ -43,11 +44,11 @@ def download_track(track_uri: str, logger=print):
     else:
         # Define paths
         album_dir = os.path.join(music_dir, artist_p, album_p)
-        tr_prefix = None if mp3_tags.track_num is None else \
-            f'{mp3_tags.track_num} - '
+        tr_prefix = None if mp3_tags["track_num"] is None else \
+            f'{mp3_tags["track_num"]} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
-        os.makedirs(album_dir, mode=0o777, exist_ok=True)
+        os.makedirs(album_dir, exist_ok=True)
 
         # Log storage locations
         logger('Album dir'.ljust(ps), f'"{album_dir}"')
@@ -80,20 +81,6 @@ def download_track(track_uri: str, logger=print):
             logger('File Overwritten:'.ljust(ps), f'"{mp3_fname}"')
             os.remove(mp3_fname)
 
-        # Download audio, robust to FileNameTooLongError
-        # for i in len(track_p):
-        #     short_name = os.path.join(
-        #       album_dir, f'{tr_prefix}{track_p[:-i]}.mp3'
-        #     )
-        #     download_method.audio_download(
-        #       track_url,
-        #       short_name,
-        #       preferred_quality,
-        #       logger=logger,
-        #     )
-        #     if os.path.isfile(short_name): 
-        #         breakpoint()
-
         # Download audio
         download_method.audio_download(track_url, mp3_fname, preferred_quality, logger=logger)
 
@@ -106,21 +93,9 @@ def download_track(track_uri: str, logger=print):
                 audio_source_url=track_url,
                 logger=logger
             )
-
-        # Potentially fix permissions
-        for restricted_path in (album_dir, mp3_fname, cov_fname):
-            # TODO: set proper file permissions! 755
-            shortdir = restricted_path.replace(str(music_dir), '...')
-            try:  # dir not found err
-                os.chmod(restricted_path, 0o0777)
-                logger('File permissions set for', shortdir)
-            except FileNotFoundError as e:
-                logger(f'File permissions NOT set for', shortdir, f'\n{e}')
-                pass
-
     # Conclude
     if file_exists:
-        set_song_db(track_uri)
+        sdb_write(track_uri, overwrite=True)
         logger('Song database value cleared to None.')
         conclusion = 'finished successfully.'
     else:
@@ -182,27 +157,7 @@ def start_daemons(max_daemons=4, verbose=False):
     return n_started
 
 
-def uri2path(uri: str) -> str:
-    """
-    .. py:function:: uri2path(uri)
-
-    URI to PATH
-    Converts a URI to a path.
-
-    :param str uri: URI of the audio source
-
-    :return: Identifier specified as path
-    :rtype: str
-
-    :Example:
-
-    >>> uri2path('youtube:1U2WcqVZhvw')
-    'youtube-1U2WcqVZhvw'
-    """
-    return uri.replace(':', '-')
-
-
-def uri2tmp(n, uri: str) -> str:
+def uri2tmp(n, uri: str | Path) -> str:
     """ URI to TMP
     Returns a formatted daemon temporary file name as string.
     Temporary files are used to track which file is being worked at
@@ -220,7 +175,7 @@ def uri2tmp(n, uri: str) -> str:
     >>> uri2tmp('*', 'youtube:y1SHa1AkHkQ')
     '.../.daemons/daemon-*_youtube-1U2WcqVZhvw.tmp'
     """
-    return daemon_dir.format(f'{n}_{uri2path(uri)}')
+    return daemon_dir.format(f'{n}_{str(uri)}')
 
 
 def get_tasks() -> list:
@@ -242,8 +197,7 @@ def get_tasks() -> list:
     """
     #
     # Here 'tasks' means 'tracks that have not been downloaded yet'.
-    song_db = get_song_db()
-    uris = song_db[song_db.title.notna()].index  # finish
+    uris = sdb_to_do()  # finish
     uris = [u for u in uris if not any(glob(uri2tmp('*', u)))]  # busy
     return uris
 
@@ -299,7 +253,7 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
             tried.append(task)
             task_tmp = Logger(uri2tmp(daemon_n, task))
             atexit.register(task_tmp.rm)
-            logger_path = log_dir.format(uri2path(task))
+            logger_path = log_dir.format(task)
 
             # Redirect stdout to log file if not verbose
             if not verbose:

@@ -5,7 +5,6 @@ import inspect
 from datetime import datetime
 import json
 import sys
-import pandas as pd
 import re
 from glob import iglob
 from time import sleep
@@ -18,32 +17,7 @@ from requests.exceptions import ReadTimeout
 from pathlib import Path
 
 
-def hms2s(hhmmss: str) -> int:
-    """
-    Converts a string representing time in the format "hh:mm:ss" to seconds.
-
-    Args:
-        :param hhmmss: The time in the format "hh:mm:ss", "mm:ss" or "ss".
-        :type hhmmss: str
-
-    Returns:
-        :return: The time in seconds.
-        :rtype: int
-    """
-    if hhmmss is None:
-        return None
-    elif isinstance(hhmmss, int):
-        return hhmmss
-    elif isinstance(hhmmss, str):
-        components = hhmmss.split(':')
-        components.reverse()
-        return sum([int(value) * multiplier for value, multiplier in
-                    zip(components, (1, 60, 3600))])
-    else:
-        raise NotImplementedError
-
-
-def get_url_platform(track_url: str, logger: object = print):
+def get_url_platform(track_url: str, logger: callable = print):
     """
     The function get_url_platform extracts the domain name from a given URL. If a
      known domain is found in the URL, it returns the corresponding domain name
@@ -223,7 +197,7 @@ class Logger:
             pass
 
 
-def free_folder(directory: str, owner='pi', logger: object = print):
+def free_folder(directory: str, owner='pi', logger: callable = print):
     # As long as you do not run the command as sudo,
     # you should not end up with ownership issues
     """ Clear any access restrictions and set owner """
@@ -436,6 +410,9 @@ def sanitize_track_name(track_name: str) -> str:
     # Define a pattern for any 4-digit year preceeding or following above words
     year_pattern = re.compile(r'(19|20)\d{2}\b', flags=re.IGNORECASE)
 
+    # Remove use of &
+    track_name = track_name.replace('&', 'and')
+
     # Perform the removal
     for w1 in words_to_remove:
         for w2 in second_words:
@@ -448,7 +425,7 @@ def sanitize_track_name(track_name: str) -> str:
     return track_name
 
 
-def track_exists(artist_p: str, track_p: str, logger=print) -> list:
+def track_exists(artist_p: str, track_p: str, logger: callable = print) -> list:
     """
     Check if this song is already available, maybe in a different album
 
@@ -475,13 +452,13 @@ def track_exists(artist_p: str, track_p: str, logger=print) -> list:
     return existing_tracks
 
 
-def get_path_components(mp3_tags: pd.Series) -> list:
+def get_path_components(mp3_tags: dict) -> list:
     # Returns the path valid components required to create the file path for
-    # storing from a mp3 tags pandas series
+    # storing from a mp3 tags dict
     path_components = [rm_char(f) for f in (
-        mp3_tags.album_artist,
-        mp3_tags.album,
-        mp3_tags.title
+        mp3_tags['album_artist'],
+        mp3_tags['album'],
+        mp3_tags['title']
     )]
 
     # I would like to dedicate this line the XXXTENTACION,

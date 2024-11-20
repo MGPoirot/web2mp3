@@ -1,36 +1,38 @@
 from initialize import spotify_api
 from utils import input_is, flatten, timeout_handler
-import pandas as pd
 from datetime import datetime
 import eyed3
 import requests
 import shutil
+from typing import Dict
 
 eyed3.log.setLevel("ERROR")
 
 
-def get_tags_uri(track_tags: pd.Series) -> str:
+def get_tags_uri(track_tags: dict) -> str:
     """
+    Returns the URI of the source of the tags
     The internet_radio_url field is None when entered manually.
     """
-    tags_uri = track_tags.internet_radio_url
-    if tags_uri is not None:
-        tags_uri = tags_uri.replace(':track', '')
-    return tags_uri
+    return track_tags['internet_radio_url'] if 'internet_radio_url' in track_tags else None
 
 
-def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
-    # in do_light mode we only get title, album and artist information;
+def get_track_tags(track_item: dict, do_light=False) -> dict:
+    # in do_light mode we only get title and artist information;
     # just enough to do matching.
-    read_timeout = False
-    album = track_item['album']
+
+    # Artists information
+    artist_items = track_item['artists']
+    artists = '; '.join([a['name'] for a in artist_items])
+
     tag_dict = {
-        'title': track_item['name'],
-        'album': album['name'],
-        'album_artist': album['artists'][0]['name'],
-        'duration': track_item['duration_ms'] / 1000,
+        'title': track_item['title'],
+        'artist': artists,
     }
     if not do_light:
+        album = track_item['album']
+
+        # Acquire additional information
         features = timeout_handler(
             func=spotify_api.audio_features,
             tracks=track_item['uri'],
@@ -49,10 +51,6 @@ def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
         track_num = track_item['track_number']
         track_max = album['total_tracks']
 
-        # Artists information
-        artist_items = track_item['artists']
-        artists = '; '.join([a['name'] for a in artist_items])
-
         # Genre information
         genres = [timeout_handler(
             func=spotify_api.artist,
@@ -60,25 +58,27 @@ def get_track_tags(track_item: dict, do_light=False) -> pd.Series:
         )['genres'] for a in artist_items]
         genres = '; '.join(flatten(genres))
         cover_img = album['images'][0]['url'] if any(album['images']) else None
-
+        tags_uri = track_item['uri'].replace('track:', '').replace(':', '.')
         tag_dict.update({
+            'album': album['name'],
+            'album_artist': artist_items[0]['name'],
             'artist': artists,
-            'internet_radio_url': track_item['uri'],
             'cover': cover_img,
             'disc_max': disc_max,
             'disc_num': disc_num,
+            'duration': track_item['duration_ms'] / 1000,
             'genre': genres,
+            'internet_radio_url': tags_uri,
             'release_date': album['release_date'],
             'recording_date': album['release_date'],
             'tagging_date': datetime.now().strftime('%Y-%m-%d'),
             'track_max': track_max,
             'track_num': track_num,
         })
-    tag_series = pd.Series(tag_dict)
-    return tag_series
+    return tag_dict
 
 
-def manual_track_tags(market, duration=None, print_space=24) -> pd.Series:
+def manual_track_tags(market, duration=None, print_space=24) -> dict:
     tag_dict = {
         'album': input('>>> Album name?'.ljust(print_space)) or None,
         'album_artist': input('>>> Artist name?'.ljust(print_space)),
@@ -105,11 +105,11 @@ def manual_track_tags(market, duration=None, print_space=24) -> pd.Series:
                  ('recording_date', 'release_date')]:
         tag_dict[a] = tag_dict[b] if tag_dict[a] is None else tag_dict[a]
 
-    tag_series = pd.Series(tag_dict)
-    if tag_series.album is None:
-        tag_series.album = tag_series.title
+    tag_series = tag_dict
+    if tag_series['album'] is None:
+        tag_series['album'] = tag_series.title
     found_artist = timeout_handler(spotify_api.search,
-                                   q=tag_series.artist,
+                                   q=tag_series['artist'],
                                    market=market,
                                    limit=1,
                                    type='artist',
@@ -117,22 +117,22 @@ def manual_track_tags(market, duration=None, print_space=24) -> pd.Series:
     is_artist = input(f'>>> Is this the artist you were looking for? '
                       f'"{found_artist["name"]}" [Yes]/No  ') or 'Yes'
     if not input_is('No', is_artist):
-        tag_series.artist = found_artist["name"]
-        tag_series.genre = ';'.join(found_artist['genres'])
+        tag_series['artist'] = found_artist["name"]
+        tag_series['genre'] = ';'.join(found_artist['genres'])
     return tag_series
 
 
-def set_file_tags(mp3_tags: pd.Series, file_name: str, audio_source_url=None,
-                  logger=print):
+def set_file_tags(mp3_tags: dict, file_name: str, audio_source_url=None,
+                  logger: callable = print):
     # We drop values that were not set ing the song_db, for example when track
     # metadata was added manually.
-    mp3_tags = mp3_tags.dropna()
+    mp3_tags = {k: v for k, v in mp3_tags.items() if v is not None}
 
     # We can set most track metadata fields directly, but track and disc number
-    # are tuples and have to be constructed, since tuples could not be stored in
-    # the parquet file format.
-    mp3_tags.track_num = (mp3_tags.track_num, mp3_tags.pop('track_max'))
-    mp3_tags.disc_num = (mp3_tags.disc_num, mp3_tags.pop('disc_max'))
+    # are tuples and have to be constructed since JSON cannot store tuples.
+    mp3_tags['track_num'] = (mp3_tags['track_num'], mp3_tags.pop('track_max'))
+    mp3_tags['disc_num'] = (mp3_tags['disc_num'], mp3_tags.pop('disc_max'))
+
     # Load the audio file
     audiofile = eyed3.load(file_name)
 
@@ -172,24 +172,24 @@ def download_cover_img(cover_img_path: str, cover_img_url: str, logger=print,
         raise ConnectionError('Album cover image could not be retrieved.')
 
 
-def get_file_tags(file_name=None, tags=None) -> pd.Series:
-    if tags is None:
-        tags = eyed3.load(file_name).tag
-
-    attributes = (
-        'album', 'album_artist', 'artist', 'bpm', 'duration',
-        'internet_radio_url', 'genre', 'recording_date',
-        'release_date', 'tagging_date', 'title',
-    )
-
-    def _get_attr(attr):
-        try:
-            return tags.__getattribute__(attr)
-        except AttributeError:
-            return None
-    mp3_tags = pd.Series({a: _get_attr(a) for a in attributes})
-    mp3_tags['disc_num'] = tags.disc_num.count
-    mp3_tags['disc_max'] = tags.disc_num.total
-    mp3_tags['track_num'] = tags.track_num.count
-    mp3_tags['track_max'] = tags.track_num.total
-    return mp3_tags
+# def get_file_tags(file_name=None, tags=None) -> dict:
+#     if tags is None:
+#         tags = eyed3.load(file_name).tag
+#
+#     attributes = (
+#         'album', 'album_artist', 'artist', 'bpm', 'duration',
+#         'internet_radio_url', 'genre', 'recording_date',
+#         'release_date', 'tagging_date', 'title',
+#     )
+#
+#     def _get_attr(attr):
+#         try:
+#             return tags.__getattribute__(attr)
+#         except AttributeError:
+#             return None
+#     mp3_tags = {a: _get_attr(a) for a in attributes}
+#     mp3_tags['disc_num'] = tags.disc_num.count
+#     mp3_tags['disc_max'] = tags.disc_num.total
+#     mp3_tags['track_num'] = tags.track_num.count
+#     mp3_tags['track_max'] = tags.track_num.total
+#     return mp3_tags
