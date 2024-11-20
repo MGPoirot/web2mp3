@@ -123,8 +123,8 @@ def debug() -> None:
 
     # Get statistics of the index
     n_records = len(list(index_path.glob('*')))  # Number of URIs in the index
-    to_do = to_do()  # List of unprocessed URIs
-    n_to_do = len(to_do)  # Number of unprocessed items
+    uris_to_do = to_do()  # List of unprocessed URIs
+    n_to_do = len(uris_to_do)  # Number of unprocessed items
     n_empty_records = n_records - n_to_do  # Number of processed (empty) URIs
 
     # Structure the meta information to print
@@ -152,7 +152,7 @@ def debug() -> None:
         return
 
     # Process the user request to inspect URIs
-    for i, path in enumerate(to_do):
+    for i, path in enumerate(uris_to_do):
 
         # Display item details
         print(f'{str(i + 1).rjust(3)}/{n_to_do}:', path.name)
