@@ -1,16 +1,13 @@
-from __future__ import annotations
-
-from initialize import music_dir, daemon_dir, log_dir, disp_daemons, glob
+from initialize import music_dir, daemon_dir, log_dir, disp_daemons, glob, Path
 from utils import Logger, get_url_platform, get_path_components, \
     track_exists
 import os
-from song_db import sdb_to_do, sdb_read, sdb_write
+import index
 from tag_manager import download_cover_img, set_file_tags
 import atexit
 import sys
 from multiprocessing import Process
 import click
-from pathlib import Path
 
 
 def download_track(track_uri: str, logger: callable = print):
@@ -22,8 +19,8 @@ def download_track(track_uri: str, logger: callable = print):
     """
     logger('Started download_track')
 
-    # Retrieve and extract song properties from the song database
-    download_info = sdb_read(track_uri)
+    # Retrieve and extract song properties from the index
+    download_info = index.read(track_uri)
 
     # Unpack kwargs from track tags
     settings = download_info['settings']
@@ -95,8 +92,8 @@ def download_track(track_uri: str, logger: callable = print):
             )
     # Conclude
     if file_exists:
-        sdb_write(track_uri, overwrite=True)
-        logger('Song database value cleared to None.')
+        index.write(track_uri, overwrite=True)
+        logger('Index item cleared to None.')
         conclusion = 'finished successfully.'
     else:
         conclusion = 'failed.'
@@ -181,10 +178,7 @@ def uri2tmp(n, uri: str | Path) -> str:
 def get_tasks() -> list:
     """ Get tracks to download
     Return a list to tracks to download. Or more explicitly: Return a list of
-    track audio sources that have been added to the song database (song_db),
-    but for which the download process - and consequently, the setting of its
-    song_db entry to None - has not yet been completed.
-
+    index items that are non-empty audio sources.
     PARAMETERS:
 
     RETURNS:
@@ -193,11 +187,11 @@ def get_tasks() -> list:
 
     EXAMPLE:
     >>> get_tasks()
-    ['youtube:y1SHa1AkHkQ', 'youtube:y1SHa1AkHkQ']
+    ['youtube.y1SHa1AkHkQ', 'youtube.y1SHa1AkHkQ']
     """
     #
     # Here 'tasks' means 'tracks that have not been downloaded yet'.
-    uris = sdb_to_do()  # finish
+    uris = index.to_do()  # finish
     uris = [u for u in uris if not any(glob(uri2tmp('*', u)))]  # busy
     return uris
 
@@ -253,11 +247,11 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
             tried.append(task)
             task_tmp = Logger(uri2tmp(daemon_n, task))
             atexit.register(task_tmp.rm)
-            logger_path = log_dir.format(task)
+            logger_path = log_dir.format(task, 'txt')
 
             # Redirect stdout to log file if not verbose
             if not verbose:
-                sys.stdout = open(str(logger_path).replace('json', 'txt'), "w")
+                sys.stdout = open(logger_path, "w")
             log_obj = Logger(logger_path, verbose=True)
             download_track(task, logger=log_obj)
             task_tmp.rm()

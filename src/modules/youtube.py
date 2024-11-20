@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 from initialize import cookie_file
 from utils import input_is
-# from youtubesearchpython import VideosSearch
 from ytmusicapi import YTMusic
 import os
 import yt_dlp
@@ -54,6 +51,7 @@ def url2uri(url: str, raw=False) -> str:
 
 def get_artist(item: dict) -> str:
     return "; ".join([a['name'] for a in item['artists']])
+
 
 def item2desc(item: dict) -> Tuple[str]:
     return item['title'], get_artist(item)

@@ -1,8 +1,7 @@
-from initialize import music_dir, spotify_api
+from initialize import music_dir, spotify_api, Path
 from utils import json_out, json_in
 from tag_manager import timeout_handler
 import eyed3
-from pathlib import Path
 from time import sleep
 from datetime import datetime
 

@@ -1,4 +1,4 @@
-from initialize import music_dir
+from initialize import music_dir, Path
 import pickle
 import os
 import inspect
@@ -14,7 +14,6 @@ from collections.abc import Iterable
 import modules
 import importlib
 from requests.exceptions import ReadTimeout
-from pathlib import Path
 
 
 def get_url_platform(track_url: str, logger: callable = print):
@@ -197,17 +196,6 @@ class Logger:
             pass
 
 
-def free_folder(directory: str, owner='pi', logger: callable = print):
-    # As long as you do not run the command as sudo,
-    # you should not end up with ownership issues
-    """ Clear any access restrictions and set owner """
-    os.system(f"sudo chmod 777 -R '{directory}'")
-    os.system(f"sudo chown -R {owner}:{owner} '{directory}'")
-    # os.chmod(file, 0o0777)
-    # os.chown(file, pwd.getpwnam('plex').pw_uid, )
-    logger(f'Rights set to rwxrwsrwx and owner to {owner} for "{directory}"')
-
-
 def input_is(control: str, input_str: str) -> bool:
     """
     Check if the user input matches either the first letter capitalized or the
@@ -331,6 +319,7 @@ def out_wrapper(module, **kwargs):
         try:
             write()
         except TypeError as e:
+            print(f'Writing in binary mode because of error "{e}".')
             write(mode='b')
 
     return out_method
@@ -502,7 +491,7 @@ def timeout_handler(func, *args, **kwargs):
                 sleep(1)
 
 
-def unique_fname(file_path):
+def unique_fname(file_path: str | Path) -> str | Path:
     """
      Preserves file_path class type in last line
     """

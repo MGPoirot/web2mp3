@@ -10,4 +10,4 @@ __*/
 !.gitignore
 *_cookies.txt
 src/local
-song_db/*
+src/index

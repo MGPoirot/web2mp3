@@ -7,38 +7,24 @@ import re
 import pathlib
 import time
 from glob import glob as dumb_glob
-
-
-def glob(pathname, *args, **kwargs) -> list:
-    # Support Path by str conversion
-    return dumb_glob(str(pathname), *args, **kwargs)
+from typing import List
 
 
 eyed3.log.setLevel("ERROR")
 
 
 class Path(type(pathlib.Path())):
+    # Subclass from pathlib.Path that adds .format functionality
     def format(self, *args, **kwargs):
         return Path(str(self).format(*args, **kwargs))
 
+    def replace(self, *args, **kwargs):
+        return Path(str(self).replace(*args, **kwargs))
 
-class FmtPath(os.PathLike):
-    """
-    Appends format functionality to pathlib.Path defined objects.
-    NB: returns regular Path objects.
-    """
 
-    def __init__(self, *args, **kwargs):
-        self._path = Path(*args, **kwargs)
-
-    def __getattr__(self, name):
-        return getattr(self._path, name)
-
-    def format(self, *args, **kwargs):
-        return Path(str(self._path).format(*args, **kwargs))
-
-    def __fspath__(self):
-        return str(self._path)
+def glob(pathname, *args, **kwargs) -> List[Path]:
+    # Support Path by str conversion
+    return [Path(i) for i in dumb_glob(str(pathname), *args, **kwargs)]
 
 
 def set_in_dot_env(key: str, value: str, overwrite=True) -> None:
@@ -85,7 +71,7 @@ def pth_validator(ans: str) -> bool:
     return Path(ans).parent.is_dir()
 
 
-def market_validator(market: str) -> bool:
+def location_validator(market: str) -> bool:
     """
     Check if a market is a valid Spotify market
 
@@ -94,7 +80,7 @@ def market_validator(market: str) -> bool:
     :return: True if market is valid, False otherwise
     :rtype: bool
     """
-    l = ["AD", "AE", "AG", "AL", "AM", "AO", "AR", "AT", "AU", "AZ", "BA", "BB",
+    l = {"AD", "AE", "AG", "AL", "AM", "AO", "AR", "AT", "AU", "AZ", "BA", "BB",
          "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BN", "BO", "BR", "BS", "BT",
          "BW", "BY", "BZ", "CA", "CD", "CG", "CH", "CI", "CL", "CM", "CO", "CR",
          "CV", "CW", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE",
@@ -109,7 +95,7 @@ def market_validator(market: str) -> bool:
          "SA", "SB", "SC", "SE", "SG", "SI", "SK", "SL", "SM", "SN", "SR", "ST",
          "SV", "SZ", "TD", "TG", "TH", "TJ", "TL", "TN", "TO", "TR", "TT", "TV",
          "TW", "TZ", "UA", "UG", "US", "UY", "UZ", "VC", "VE", "VN", "VU", "WS",
-         "XK", "ZA", "ZM", "ZW"]
+         "XK", "ZA", "ZM", "ZW"}
     return market in l
 
 
@@ -128,19 +114,14 @@ def run_setup_wizard():
     :return: None
     """
     music_dir_default = home_dir / "Music"
-    market_default = "US"
+    location_default = "US"
 
     qs = {
-        'MUSIC_DIR': ('Music download directory',
-                      pth_validator, music_dir_default),
-        '# Spotify username': ('Spotify username (optional)',
-                               lambda x: True, 'None'),
-        'SPOTIPY_CLIENT_ID': ('Spotify client ID',
-                              sfy_validator, None),
-        'SPOTIPY_CLIENT_SECRET': ('Spotify client secret',
-                                  sfy_validator, None),
-        'LOCATION': ('Location',
-                           market_validator, market_default)
+        'MUSIC_DIR': ('Music download directory', pth_validator, music_dir_default),
+        '# Spotify username': ('Spotify username (optional)', lambda x: 1, 'NA'),
+        'SPOTIPY_CLIENT_ID': ('Spotify client ID', sfy_validator, None),
+        'SPOTIPY_CLIENT_SECRET': ('Spotify client secret', sfy_validator, None),
+        'LOCATION': ('Location', location_validator, location_default)
     }
     print("                         , - ~ ~ ~ - ,                           \n"
           "                     , '   WEB 2 MP3   ' ,                       \n"
@@ -162,8 +143,7 @@ def run_setup_wizard():
             q_fmt = f'What is your {question}?'
             default = default if not os.environ.get(k) else os.environ.get(k)
             d_fmt = f'[{default}]' if default else ''
-            answer = input(f'  {i}. {q_fmt.ljust(24)}\n'
-                           f'    {d_fmt}\n')
+            answer = input(f'  {i}. {q_fmt.ljust(24)}\n    {d_fmt}\n')
             answer = default if not answer and default else answer
             if validator(answer):
                 set_in_dot_env(key=k, value=answer)
@@ -172,6 +152,7 @@ def run_setup_wizard():
                 print(f'     "{answer}" is not a valid {question}')
     print('Secrets successfully stored.\n'
           'Web2MP3 set up successful.')
+
 
 # Where are we?
 home_dir = Path(__file__).parents[1]
@@ -184,8 +165,7 @@ if not dotenv.find_dotenv(ENV_PATH):
 dotenv.load_dotenv(ENV_PATH)
 
 # Check if setup file is complete, if not, resume setup
-env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', \
-    'SPOTIPY_CLIENT_SECRET', 'LOCATION'
+env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', 'SPOTIPY_CLIENT_SECRET', 'LOCATION'
 env_exists = [True if os.environ.get(v) else False for v in env_keys]
 if not all(env_exists):
     print("Incomplete environment file found. Resuming setup.")
@@ -194,14 +174,18 @@ dotenv.load_dotenv(ENV_PATH)
 
 # Define paths from config env
 music_dir = Path(os.environ.get('MUSIC_DIR'))
-default_market = os.environ.get('LOCATION')
+default_location = os.environ.get('LOCATION')
 
-# Maybe I will replace the use of string with Path objects here as well in the
 # future, but currently, nothing is broken so no need to fix anything.
 daemon_dir = home_dir / '.daemons' / 'daemon-{}.tmp'
-log_dir = home_dir / '.logs' / '{}.json'
-song_db_file = home_dir / '{}song_db.pqt'
-song_db_path = home_dir / 'song_db'
+log_dir = home_dir / '.logs' / '{}.{}'
+index_path = home_dir / 'src' / 'index'
+
+# Clean up logs on startup
+for log_regex in (log_dir.format('*', 'json'), log_dir.format('*', 'txt')):
+    fs = glob(log_regex)
+    for f in sorted(fs, key=lambda f: os.path.getmtime(f), reverse=True)[20:]:
+        f.unlink()
 
 # Check if a COOKIE_FILE is set
 if not os.environ.get('COOKIE_FILE'):
@@ -237,28 +221,6 @@ def disp_daemons():
 
 def run_clean_up(prompt=True):
     # run utilities
-
-    # Check number of existing log files
-    log_files_json = glob(log_dir.format('*'))
-    log_files_txt = glob(log_dir.format('*').replace('.json', '.txt'))
-    log_files = log_files_json + log_files_txt
-    n_log_files = len(log_files)
-    if n_log_files > 100:
-        if prompt:
-            rm_logs = input(f'Initialization found many {n_log_files} log '
-                            f'files. Remove up to last 100?  yes/[No]  ')
-        else:
-            rm_logs = 'Yes'
-        if rm_logs in 'Yesyes':
-            # rm log files
-            log_files = sorted(log_files, key=lambda x: os.path.getmtime(x))
-            for log_file in log_files[:-100]:
-                os.remove(log_file)
-            print(n_log_files - 100, 'log files deleted.')
-            pass
-    else:
-        print(f'Found {n_log_files} log files.')
-
     disp_daemons()
     daemons = glob(daemon_dir.format('*'))
     if any(daemons):

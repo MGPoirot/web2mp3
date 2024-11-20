@@ -26,7 +26,6 @@ def sort_lookup(query: dict, matched_obj: dict):
     return track_url, track_tags
 
 
-
 def get_description(soundcloud_url: str, logger: object = print, *kwargs) -> \
         str:
     raise NotImplementedError('Soundcloud API connection has not been implemented yet')

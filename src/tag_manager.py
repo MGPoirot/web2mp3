@@ -124,8 +124,7 @@ def manual_track_tags(market, duration=None, print_space=24) -> dict:
 
 def set_file_tags(mp3_tags: dict, file_name: str, audio_source_url=None,
                   logger: callable = print):
-    # We drop values that were not set ing the song_db, for example when track
-    # metadata was added manually.
+    # Drop None values from tags
     mp3_tags = {k: v for k, v in mp3_tags.items() if v is not None}
 
     # We can set most track metadata fields directly, but track and disc number
