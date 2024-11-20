@@ -11,7 +11,7 @@ name = 'soundcloud'
 target = 'track'
 
 # patterns to match in a URL
-url_patterns = ['soundcloud.com', 'soundcloud:', ]
+url_patterns = ['soundcloud.com', 'soundcloud.', ]
 
 # substring to recognize a playlist object
 playlist_identifier = ' '
