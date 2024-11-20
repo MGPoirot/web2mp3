@@ -131,6 +131,7 @@ class Logger:
             self.id = 0
             self.create_new()
         else:
+            breakpoint()
             content = json_in(self.path)
             content = {} if content is None else content
             last_id = [k.split('-')[0] for k in content.keys()][0]
