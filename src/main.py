@@ -156,7 +156,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
         # Print a synopsis of our search result
 
-        sim_strs = ' '.join([f'{v:.0%}'.rjust(4) for v in [key, duration, similarity]])
+        sim_strs = ' '.join([' N/A' if v is None else f'{v:.0%}'.rjust(4) for v in [key, duration, similarity]])
         key_str = f'{str(key)}%' if key is None else sim_strs
         logger(''.rjust(ps), f'{n}) {item_desc[:46].ljust(47)} {key_str}')
 
@@ -164,7 +164,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         is_duration_match = None if duration is None else \
                 abs(key - 1) < duration_tolerance
 
-        is_meta_match = compare_meta(item_title, query["title"], item_artist, query["artist"])
+        is_meta_match = item_title and compare_meta(item_title, query["title"], item_artist, query["artist"])
 
         # Check if the search result is a match
         if all(is_meta_match) and is_duration_match:
@@ -172,7 +172,6 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
             if platform.name == 'spotify':
                 match = get_track_tags(item)
             else:
-                breakpoint()
                 match = {'track_uri': 'youtube.' + item['videoId'],
                          'title': item['title'],
                          'artist': item['artists'][0]['name'],
