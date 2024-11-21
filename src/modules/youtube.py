@@ -50,7 +50,9 @@ def url2uri(url: str, raw=False) -> str:
 
 
 def get_artist(item: dict) -> str:
-    return "; ".join([a['name'] for a in item['artists']])
+    if 'artists' in item:
+        return "; ".join([a['name'] for a in item['artists']])
+    return ''
 
 
 def item2desc(item: dict) -> Tuple[str]:
