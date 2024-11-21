@@ -219,7 +219,7 @@ def disp_daemons():
         current_time = time.time()
         time_diff = current_time - file_mtime
         days_diff = round(time_diff / (60 * 60 * 24))
-        print(daemon.ljust(60), f'{days_diff} days old')
+        print(str(daemon).ljust(50), f'{days_diff} days old')
 
 
 def run_clean_up(prompt=True):
