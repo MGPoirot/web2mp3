@@ -190,8 +190,8 @@ def search(search_query, **kwargs) -> List[dict]:
     )
 
 
-def t_extractor(*items, query_duration=1) -> List[float]:
+def t_extractor(*items, query_duration=1) -> List[float | None]:
     # Returns duration of a track from a list of tracks as float
     res = [i['duration_seconds'] if 'duration_seconds' in i else None for i in items]
-    res = [i / query_duration if i is not None else 0 for i in res]
+    res = [i / query_duration if i is not None else None for i in res]
     return res
