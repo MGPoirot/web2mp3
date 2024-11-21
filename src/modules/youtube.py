@@ -195,3 +195,20 @@ def t_extractor(*items, query_duration=1) -> List[float | None]:
     res = [i['duration_seconds'] if 'duration_seconds' in i else None for i in items]
     res = [i / query_duration if i is not None else None for i in res]
     return res
+
+
+def validate_items(items: List[dict]) -> List[int]:
+    """
+    Validates the presence and population of 'title' and 'videoId' fields
+    in a list of dictionaries.
+
+    :param items: A list of dictionaries to validate.
+    :return: A list of indices (1-based) for dictionaries that have both
+             'title' and 'videoId' populated.
+    :rtype: List[int]
+    """
+    valid_digits = []
+    for n, i in enumerate(items, 1):
+        if 'title' in i and 'videoId' in i and i['videoId'] is not None:
+            valid_digits.append(n)
+    return valid_digits
