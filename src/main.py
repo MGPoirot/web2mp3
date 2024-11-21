@@ -62,21 +62,6 @@ def similarity_mult(a: float | None, b: float | None) -> float | None:
     return a * b
 
 
-def validate_items(items: List[dict]) -> List[int]:
-    """
-    Validates the presence and population of 'title' and 'videoId' fields
-    in a list of dictionaries.
-
-    :param items: A list of dictionaries to validate.
-    :return: A list of indices (1-based) for dictionaries that have both
-             'title' and 'videoId' populated.
-    :rtype: List[int]
-    """
-    valid_digits = []
-    for n, i in enumerate(items, 1):
-        if 'title' in i and 'videoId' in i and i['videoId'] is not None:
-            valid_digits.append(n)
-    return valid_digits
 
 
 def compare_meta(*args: str | None) -> bool:
@@ -119,7 +104,7 @@ def compare_meta(*args: str | None) -> bool:
 
 
 def lookup(query: dict, platform, logger: callable = print, sort_by='none',
-           **kwargs) -> dict | None:
+           **kwargs) -> dict | bool | None:
     """
     Search for a track on a specified platform and return the best match.
 
@@ -191,13 +176,13 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
     # Check if one of our search results matches our query
     if not any(items):
         logger(f'No results found for {accept_origin} search.')
-        return None
+        return False
 
     # Check if essential fields are present
-    valid_items = validate_items(items)
+    valid_items = platform.validate_items(items)
     if not any(valid_items):
         logger(f'No valid results found for {accept_origin} search.')
-        return None
+        return False
 
     # Read properties that we can use to find a match: 1) original soring,
     # 2) Duration, 3) Title, 4) a combination of duration and title.

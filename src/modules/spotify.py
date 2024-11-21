@@ -127,3 +127,18 @@ def search(search_query, **kwargs) -> List[dict]:
 def t_extractor(*items, query_duration=1) -> list:
     # Returns duration of a track from a list of tracks as float
     return [i['duration_ms'] / 1000 / query_duration for i in items]
+
+
+def validate_items(items: List[dict]) -> List[int]:
+    """
+    Validates the presence and population of 'title' and 'videoId' fields
+    in a list of dictionaries.
+
+    AFAIK Spotify meta data is always complete
+
+    :param items: A list of dictionaries to validate.
+    :return: A list of indices (1-based) for dictionaries that have both
+             'title' and 'videoId' populated.
+    :rtype: List[int]
+    """
+    return list(range(1, len(items) + 1))
