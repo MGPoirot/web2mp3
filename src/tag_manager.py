@@ -85,7 +85,7 @@ def manual_track_tags(market, duration=None, print_space=24) -> dict:
         'artist': None,
         'bpm': None,
         'duration': duration,
-        'internet_radio_url': None,
+        'internet_radio_url': 'manual',
         'cover': input('>>> Cover URL?'.ljust(print_space)) or None,
         'disc_num': input('>>> Disc No.?'.ljust(print_space)) or 1,
         'disc_max': None,

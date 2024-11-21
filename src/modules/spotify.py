@@ -1,6 +1,6 @@
 from initialize import spotify_api
 from utils import timeout_handler
-from tag_manager import get_track_tags
+from tag_manager import get_track_tags, manual_track_tags
 from spotipy.exceptions import SpotifyException
 import requests
 from typing import Tuple, List
@@ -142,3 +142,11 @@ def validate_items(items: List[dict]) -> List[int]:
     :rtype: List[int]
     """
     return list(range(1, len(items) + 1))
+
+def get_meta_info(item: dict) -> dict:
+    return get_track_tags(item)
+
+
+def manual_handler(print_space=24, **kwargs) -> dict:
+    logger('Provide manual track info: ')
+    return manual_track_tags(print_space=print_space, **kwargs)

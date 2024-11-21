@@ -217,13 +217,13 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
     for n, (key, item, duration, similarity) in enumerate(sorted_properties, 1):
         # Extract information from our query result items
         item_title, item_artist = platform.item2desc(item)
-        item_desc = f'{item_title} - {item_artist}'
+        tit_art = f'{item_title} - {item_artist}'
 
         # Print a synopsis of our search result
         n_str = n if n in valid_items else 'X'
         similarity_scores = (key, duration, similarity)
         sim_strs = ' '.join([similarity_str(v) for v in similarity_scores])
-        logger(''.rjust(ps), f'{n_str}) {item_desc[:46].ljust(47)} {sim_strs}')
+        logger(''.rjust(ps), f'{n_str}) {tit_art[:46].ljust(47)} {sim_strs}')
 
         # Check if the item's duration difference from the target is acceptable
         is_duration_match = abs(key - 1) < duration_tolerance and bool(duration)
@@ -235,15 +235,8 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
         # Check if the search result is a match
         if is_meta_match and is_duration_match:
-            logger(f'Clear {platform.name} match:'.ljust(ps), f'{item_desc}')
-            if platform.name == 'spotify':
-                match = get_track_tags(item)
-            else:
-                match = {'track_uri': 'youtube.' + item['videoId'],
-                         'title': item['title'],
-                         'artist': item['artists'][0]['name'],
-                         'duration': item['duration_seconds']}
-            break
+            logger(f'Clear {platform.name} match:'.ljust(ps), f'{tit_art}')
+            match = platform.get_meta_info(item)
 
     # Without clear match provide the user with options:
     if match is None:
@@ -275,19 +268,9 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
             if idx > len(items) or idx < 0:
                 logger(f'Invalid index {idx + 1} for {len(items)} options.')
             else:
-                if platform.name == 'spotify':
-                    match = get_track_tags(items[idx])
-                elif platform.name == 'youtube':
-                    match = {
-                        'track_uri': 'youtube.' + items[idx]['videoId'],
-                        'album_artist': items[idx]['artists'][0]['name'],
-                        'artist': platform.get_artist(items[idx]),
-                        'title': items[idx]['title'],
-                        'duration': items[idx]['duration_seconds'],
-                    }
-                item_desc = f'{match["title"]} - {match["artist"]}'
-                logger(f'Match accepted by {accept_origin}: '
-                       f''.ljust(ps), item_desc)
+                match = platform.get_meta_info(items[idx])
+                tit_art = f'{match["title"]} - {match["artist"]}'
+                logger(f'Match accepted by {accept_origin}:'.ljust(ps), tit_art)
 
         elif input_is('Retry', proceed):
             logger(f'Provide new info for {platform.name} query: ')
@@ -297,14 +280,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
             query['artist'] = ''
 
         elif input_is('Manual', proceed):
-            if platform.name == 'spotify':
-                logger('Provide manual track info: ')
-                match = manual_track_tags(market=market,
-                                          duration=query['duration'])
-                match['internet_radio_url'] = 'manual'
-            elif platform.name == 'youtube':
-                match = input('>>> Provide YouTube URL: '
-                                    ''.ljust(ps)).split('&')[0]
+            match = platform.manual_handler(market=market, duration=duration)
 
         elif input_is('Abort', proceed):
             match = False
@@ -384,6 +360,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
         return f'Failed: Could not match {source.name.capitalize()} to ' \
                f'{search.name.capitalize()} item'
 
+    breakpoint()
     track_uri, track_tags = source.sort_lookup(query, match_obj)
     tags_uri = get_tags_uri(track_tags)
     source_uri = source.url2uri(track_url)  # 1 id may >1 urls

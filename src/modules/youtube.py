@@ -212,3 +212,19 @@ def validate_items(items: List[dict]) -> List[int]:
         if 'title' in i and 'videoId' in i and i['videoId'] is not None:
             valid_digits.append(n)
     return valid_digits
+
+
+def get_meta_info(item: dict) -> dict:
+    return {
+        'track_uri': 'youtube.' + item['videoId'],
+        'title': item['title'],
+        'artist': item['artists'][0]['name'],
+        'artists': get_artist(item),
+        'duration': item['duration_seconds'],
+    }
+
+
+def manual_handler(print_space=24, **kwargs) -> str:
+    url =  input('>>> Provide YouTube URL: '.ljust(print_space)).split('&')[0]
+    return {'track_uri': url2uri(url)}
+
