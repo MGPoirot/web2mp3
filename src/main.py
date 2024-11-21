@@ -131,7 +131,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         title_similarity = [similar(i['title'], query['title']) if 'title' in i else None for i in items]
         combination = [d_sim * t_sim if d_sim is not None and t_sim is not None else None for d_sim, t_sim in zip(duration_similarity, title_similarity)]
         original_sorting = [i/(len(items)-1) for i in range(len(items))][::-1]
-
+        valid_digits = [n if 'title' in i else None for n, i in enumerate(items, 1)]
         # Specify the key to be sorted by
         sort_key = {
             'none': original_sorting,
@@ -155,10 +155,10 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         item_desc = f'{item_title} - {item_artist}'
 
         # Print a synopsis of our search result
-
+        n_str = n if n in valid_digits else 'X'
         sim_strs = ' '.join([' N/A' if v is None else f'{v:.0%}'.rjust(4) for v in [key, duration, similarity]])
         key_str = f'{str(key)}%' if key is None else sim_strs
-        logger(''.rjust(ps), f'{n}) {item_desc[:46].ljust(47)} {key_str}')
+        logger(''.rjust(ps), f'{n_str}) {item_desc[:46].ljust(47)} {key_str}')
 
         # Check how the duration matches up with what we are looking for
         is_duration_match = None if duration is None else \
@@ -200,7 +200,12 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
         # Take action according to proceed method
         if proceed.isdigit():
-            idx = int(proceed) - 1
+            proceed = int(proceed)
+            while proceed not in valid_digits:
+                proceed += 1
+                if proceed > len(items):
+                    logger('All defaults were invalid.')
+            idx = proceed - 1
             if idx > len(items) or idx < 0:
                 logger(f'Invalid index {idx + 1} for {len(items)} options.')
             else:
