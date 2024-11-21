@@ -13,12 +13,73 @@ from difflib import SequenceMatcher
 import unicodedata
 
 
-def similar(a, b):
-    # Returns a string similarity score between 0 and 1
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+def similarity_str(sim_score: float | None) -> str:
+    return ' N/A' if sim_score is None else f'{sim_score:.0%}'.rjust(4)
 
 
-def compare_meta(*args) -> List[bool]:
+def title_similarity(a: dict, b: dict) -> float | None:
+    """
+    Computes the similarity score between the titles of two dictionaries
+    using a sequence matching algorithm.
+
+    :param a: A dictionary containing a 'title' key with a string value.
+    :param b: Another dictionary containing a 'title' key with a string value.
+    :return: A similarity score between 0 and 1, where 1 indicates a perfect
+             match. Returns `None` if either dictionary lacks a 'title' key.
+    :rtype: float | None
+    """
+    if 'title' not in a or 'title' not in b:
+        return None
+    return SequenceMatcher(None, a['title'].lower(), b['title'].lower()).ratio()
+
+
+def duration_similarity(relative_d: float | None) -> float | None:
+    """
+    Calculates a duration similarity score based on the relative duration
+    of a track compared to a target's duration.
+
+    :param relative_d: The relative duration of the track compared to the
+                       target's duration. This should be a positive value
+                       or `None`.
+    :return: A similarity score ranging from 1 (perfect match) to 0, or
+             `None` if the input is `None`.
+    :rtype: float | None
+    """
+    return None if relative_d is None else 1 - abs(relative_d - 1)
+
+
+def similarity_mult(a: float | None, b: float | None) -> float | None:
+    """
+    Multiplies two similarity scores, returning None if either input is None.
+
+    :param a: The first similarity score (float or None).
+    :param b: The second similarity score (float or None).
+    :return: The product of the two scores or None if either input is None.
+    :rtype: float | None
+    """
+    if a is None or b is None:
+        return None
+    return a * b
+
+
+def validate_items(items: List[dict]) -> List[int]:
+    """
+    Validates the presence and population of 'title' and 'videoId' fields
+    in a list of dictionaries.
+
+    :param items: A list of dictionaries to validate.
+    :return: A list of indices (1-based) for dictionaries that have both
+             'title' and 'videoId' populated.
+    :rtype: List[int]
+    """
+    valid_digits = []
+    for n, i in enumerate(items, 1):
+        if 'title' in i and 'videoId' in i and i['videoId'] is not None:
+            valid_digits.append(n)
+    return valid_digits
+
+
+def compare_meta(*args: str | None) -> bool:
     """
     Checks if the given track name and artist name are a clear match for a
     given title (case-, diacritic- and non-alphanumeric insensitive).
@@ -48,10 +109,13 @@ def compare_meta(*args) -> List[bool]:
 
     matches = []
     for a, b in zip(*[args[0::2]] + [args[1::2]]):
-        a_s = sanitize_track_name(a)
-        b_s = sanitize_track_name(b)
-        matches.append(strip(a_s) in strip(b_s) or strip(b_s) in strip(a_s))
-    return matches
+        if a is None or b is None:
+            matches.append(False)
+        else:
+            a_s = sanitize_track_name(a)
+            b_s = sanitize_track_name(b)
+            matches.append(strip(a_s) in strip(b_s) or strip(b_s) in strip(a_s))
+    return all(matches)
 
 
 def lookup(query: dict, platform, logger: callable = print, sort_by='none',
@@ -106,68 +170,86 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
     default_response = kwargs['response']
     duration_tolerance = kwargs['tolerance']
     market = kwargs['market']
-    match = None  # This is what we will return
+
+    # This is what we will return
+    match = None
+
+    # Extract properties that we will try to find a match to
+    target_duration = query['duration']
+    target_title = query["title"]
+    target_artist = query["artist"]
 
     # Sanitize default response
     accept_origin = 'the user' if default_response is None else 'default'
 
     # Query the desired platform
     search_query = f'{query["title"]} {query["artist"]}'
-    qstr = search_query if len(search_query) < 53 else search_query[:50] + '...'
+    qstr = search_query if len(search_query) < 47 else search_query[:44] + '...'
     logger(f'Searching {platform.name.capitalize()} for:'.ljust(ps), f'"{qstr}"'.ljust(50), "srt% tim% sim%")
     items = platform.search(search_query, **kwargs)
 
     # Check if one of our search results matches our query
     if not any(items):
-        sorted_properties = []
         logger(f'No results found for {accept_origin} search.')
-        if default_response is not None:
-            default_response = 'Abort'
-    else:
-        # Define matching properties
-        relative_duration = platform.t_extractor(*items, query_duration=query['duration'])
-        duration_similarity = [None if d is None else 1 - abs(d - 1) for d in relative_duration]
-        # When we use YouTube as source...
-        title_similarity = [similar(i['title'], query['title']) if 'title' in i else None for i in items]
-        combination = [d_sim * t_sim if d_sim is not None and t_sim is not None else None for d_sim, t_sim in zip(duration_similarity, title_similarity)]
-        original_sorting = [i/(len(items)-1) for i in range(len(items))][::-1]
-        valid_digits = [n if 'title' in i and 'videoId' in i and i['videoId'] is not None else None for n, i in enumerate(items, 1)]
-        # Specify the key to be sorted by
-        sort_key = {
-            'none': original_sorting,
-            'duration': duration_similarity,
-            'title': title_similarity,
-            'combination': combination,
-        }[sort_by]
+        return None
 
-        # Replace Nones
-        sort_key = [0 if v is None else v for v in sort_key]
-        sorted_properties = sorted(zip(
-            sort_key,
-            items,
-            relative_duration,
-            title_similarity,
-        ), reverse=True)
+    # Check if essential fields are present
+    valid_items = validate_items(items)
+    if not any(valid_items):
+        logger(f'No valid results found for {accept_origin} search.')
+        return None
 
+    # Read properties that we can use to find a match: 1) original soring,
+    # 2) Duration, 3) Title, 4) a combination of duration and title.
+    # Tracks for which fields are missing or None are not valid options.
+    original_sorting = [i / (len(items) - 1) for i in range(len(items))][::-1]
+
+    relative_d = platform.t_extractor(*items, query_duration=target_duration)
+    d_similarity = [duration_similarity(d) for d in relative_d]
+
+    t_similarity = [title_similarity(i, query) for i in items]
+
+    combination = [similarity_mult(*s) for s in zip(d_similarity, t_similarity)]
+
+    # Specify the key to be sorted by
+    sort_key = {
+        'none': original_sorting,
+        'duration': d_similarity,
+        'title': t_similarity,
+        'combination': combination,
+    }[sort_by]
+
+    # Replace Nones
+    sort_key = [0 if v is None else v for v in sort_key]
+    sorted_properties = sorted(zip(
+        sort_key,
+        items,
+        relative_d,
+        t_similarity,
+    ), reverse=True)
+
+    # Print a list of each option
     for n, (key, item, duration, similarity) in enumerate(sorted_properties, 1):
         # Extract information from our query result items
         item_title, item_artist = platform.item2desc(item)
         item_desc = f'{item_title} - {item_artist}'
 
         # Print a synopsis of our search result
-        n_str = n if n in valid_digits else 'X'
-        sim_strs = ' '.join([' N/A' if v is None else f'{v:.0%}'.rjust(4) for v in [key, duration, similarity]])
-        key_str = f'{str(key)}%' if key is None else sim_strs
-        logger(''.rjust(ps), f'{n_str}) {item_desc[:46].ljust(47)} {key_str}')
+        n_str = n if n in valid_items else 'X'
+        similarity_scores = (key, duration, similarity)
+        sim_strs = ' '.join([similarity_str(v) for v in similarity_scores])
+        logger(''.rjust(ps), f'{n_str}) {item_desc[:46].ljust(47)} {sim_strs}')
 
-        # Check how the duration matches up with what we are looking for
-        is_duration_match = None if duration is None else \
-                abs(key - 1) < duration_tolerance
-
-        is_meta_match = item_title and compare_meta(item_title, query["title"], item_artist, query["artist"])
+        # Check if the item's duration difference from the target is acceptable
+        is_duration_match = abs(key - 1) < duration_tolerance and bool(duration)
+        # Check if the item's title and album match the target's
+        is_meta_match = compare_meta(
+            item_title, target_title,
+            item_artist, target_artist,
+        )
 
         # Check if the search result is a match
-        if all(is_meta_match) and is_duration_match:
+        if is_meta_match and is_duration_match:
             logger(f'Clear {platform.name} match:'.ljust(ps), f'{item_desc}')
             if platform.name == 'spotify':
                 match = get_track_tags(item)
@@ -201,11 +283,9 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         # Take action according to proceed method
         if proceed.isdigit():
             proceed = int(proceed)
-            while proceed not in valid_digits:
+            # Skip invalid options
+            while proceed not in valid_items:
                 proceed += 1
-                if proceed > len(items):
-                    logger('All defaults were invalid.')
-                    return None
             idx = proceed - 1
             if idx > len(items) or idx < 0:
                 logger(f'Invalid index {idx + 1} for {len(items)} options.')
@@ -323,7 +403,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     tags_uri = get_tags_uri(track_tags)
     source_uri = source.url2uri(track_url)  # 1 id may >1 urls
 
-    # 1) Check if the file, or a similar file does not exist already
+    # 1) Check if the file, or a title_similarity file does not exist already
     if file_from_tags_exists(track_tags, logger, avoid_duplicates):
         return 'Skipped: FileExists'
 
