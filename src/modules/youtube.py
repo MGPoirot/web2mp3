@@ -54,7 +54,8 @@ def get_artist(item: dict) -> str:
 
 
 def item2desc(item: dict) -> Tuple[str]:
-    return item['title'], get_artist(item)
+    title = item['title'] if 'title' in item else ''
+    return title, get_artist(item)
 
 
 def uri2url(uri: str) -> str:
