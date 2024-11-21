@@ -128,8 +128,8 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         relative_duration = platform.t_extractor(*items, query_duration=query['duration'])
         duration_similarity = [None if d is None else 1 - abs(d - 1) for d in relative_duration]
         # When we use YouTube as source...
-        title_similarity = [similar(i['title'] if 'title' in i else '', query['title']) for i in items]
-        combination = [d_sim * t_sim for d_sim, t_sim in zip(duration_similarity, title_similarity)]
+        title_similarity = [similar(i['title'], query['title']) if 'title' in i else None for i in items]
+        combination = [d_sim * t_sim if d_sim is not None and t_sim is not None else None for d_sim, t_sim in zip(duration_similarity, title_similarity)]
         original_sorting = [i/(len(items)-1) for i in range(len(items))][::-1]
 
         # Specify the key to be sorted by
