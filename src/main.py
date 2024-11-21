@@ -131,7 +131,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         title_similarity = [similar(i['title'], query['title']) if 'title' in i else None for i in items]
         combination = [d_sim * t_sim if d_sim is not None and t_sim is not None else None for d_sim, t_sim in zip(duration_similarity, title_similarity)]
         original_sorting = [i/(len(items)-1) for i in range(len(items))][::-1]
-        valid_digits = [n if 'title' in i else None for n, i in enumerate(items, 1)]
+        valid_digits = [n if 'title' in i and 'videoId' in i else None for n, i in enumerate(items, 1)]
         # Specify the key to be sorted by
         sort_key = {
             'none': original_sorting,
