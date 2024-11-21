@@ -119,7 +119,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
     # Check if one of our search results matches our query
     if not any(items):
-        sorted_properies = []
+        sorted_properties = []
         logger(f'No results found for {accept_origin} search.')
         if default_response is not None:
             default_response = 'Abort'
@@ -142,14 +142,14 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
         # Replace Nones
         sort_key = [0 if v is None else v for v in sort_key]
-        sorted_properies = sorted(zip(
+        sorted_properties = sorted(zip(
             sort_key,
             items,
             relative_duration,
             title_similarity,
         ), reverse=True)
 
-    for n, (key, item, duration, similarity) in enumerate(sorted_properies, 1):
+    for n, (key, item, duration, similarity) in enumerate(sorted_properties, 1):
         # Extract information from our query result items
         item_title, item_artist = platform.item2desc(item)
         item_desc = f'{item_title} - {item_artist}'
@@ -213,7 +213,6 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
                 if platform.name == 'spotify':
                     match = get_track_tags(items[idx])
                 elif platform.name == 'youtube':
-                    breakpoint()
                     match = {
                         'track_uri': 'youtube.' + items[idx]['videoId'],
                         'album_artist': items[idx]['artists'][0]['name'],
