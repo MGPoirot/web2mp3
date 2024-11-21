@@ -172,6 +172,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
             if platform.name == 'spotify':
                 match = get_track_tags(item)
             else:
+                breakpoint()
                 match = {'track_uri': 'youtube.' + item['videoId'],
                          'title': item['title'],
                          'artist': item['artists'][0]['name'],
