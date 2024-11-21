@@ -17,7 +17,7 @@ def download_track(track_uri: str, logger: callable = print):
     :param logger:
     :return: Does not return anything
     """
-    logger('Started download_track')
+    logger(f'Started download_track for "{track_uri}"')
 
     # Retrieve and extract song properties from the index
     download_info = index.read(track_uri)
@@ -220,9 +220,9 @@ def daemon_job(max_daemons=4, verbose=False, verbose_continuous=False):
     else:
         if max_daemons != -1:
             if verbose:
-                print('No Daemon initiated, all Daemons are already running:')
+                print(f'No Daemon initiated, {max_daemons} Daemons are already running:')
                 disp_daemons()
-                print('Run initialize.py if you want the clean these up.')
+                print('Run initialize.py to clean old Daemon files or increase the --max_daemons flag.')
             return  # Return if all Daemons are running
         # Always initiate the next daemon
         all_daemon_files = range(len(glob(daemon_dir.format('*'))))
