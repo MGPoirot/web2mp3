@@ -205,6 +205,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
                 proceed += 1
                 if proceed > len(items):
                     logger('All defaults were invalid.')
+                    return None
             idx = proceed - 1
             if idx > len(items) or idx < 0:
                 logger(f'Invalid index {idx + 1} for {len(items)} options.')
