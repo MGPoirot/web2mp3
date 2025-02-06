@@ -46,7 +46,10 @@ def download_track(track_uri: str, logger: callable = print):
             f'{mp3_tags["track_num"]} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
-        os.makedirs(album_dir, exist_ok=True)
+        try:
+            os.makedirs(album_dir, exist_ok=True)
+        except OSError:
+            breakpoint()
 
         # Log storage locations
         logger('Album dir'.ljust(ps), f'"{album_dir}"')
