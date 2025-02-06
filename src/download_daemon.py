@@ -1,6 +1,6 @@
 from initialize import music_dir, daemon_dir, log_dir, disp_daemons, glob, Path
 from utils import Logger, get_url_platform, get_path_components, \
-    track_exists
+    track_exists, clip_path_length
 import os
 import index
 from tag_manager import download_cover_img, set_file_tags
@@ -9,7 +9,6 @@ import sys
 from multiprocessing import Process
 import click
 
-max_path_length = 255
 
 def download_track(track_uri: str, logger: callable = print):
     """
@@ -41,15 +40,13 @@ def download_track(track_uri: str, logger: callable = print):
         file_exists = True
     else:
         # Define paths
-        album_dir = os.path.join(music_dir, artist_p[:max_path_length], album_p[:max_path_length])
+        album_dir = clip_path_length(music_dir / artist_p / album_p)
+        breakpoint()
         tr_prefix = None if mp3_tags["track_num"] is None else \
             f'{mp3_tags["track_num"]} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
         mp3_fname = os.path.join(album_dir, f'{tr_prefix}{track_p}.mp3')
-        try:
-            os.makedirs(album_dir, exist_ok=True)
-        except OSError:
-            breakpoint()
+        os.makedirs(album_dir, exist_ok=True)
 
         # Log storage locations
         logger('Album dir'.ljust(ps), f'"{album_dir}"')
