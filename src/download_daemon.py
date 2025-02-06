@@ -41,7 +41,6 @@ def download_track(track_uri: str, logger: callable = print):
     else:
         # Define paths
         album_dir = clip_path_length(music_dir / artist_p / album_p)
-        breakpoint()
         tr_prefix = None if mp3_tags["track_num"] is None else f'{mp3_tags["track_num"]} - '
         cov_fname = album_dir / 'folder.jpg'
         mp3_fname = album_dir / f'{tr_prefix}{track_p}.mp3'
