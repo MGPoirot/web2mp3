@@ -9,6 +9,7 @@ import sys
 from multiprocessing import Process
 import click
 
+max_path_length = 255
 
 def download_track(track_uri: str, logger: callable = print):
     """
@@ -40,7 +41,7 @@ def download_track(track_uri: str, logger: callable = print):
         file_exists = True
     else:
         # Define paths
-        album_dir = os.path.join(music_dir, artist_p, album_p)
+        album_dir = os.path.join(music_dir, artist_p[:max_path_length], album_p[:max_path_length])
         tr_prefix = None if mp3_tags["track_num"] is None else \
             f'{mp3_tags["track_num"]} - '
         cov_fname = os.path.join(album_dir, 'folder.jpg')
