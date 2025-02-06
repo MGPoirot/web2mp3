@@ -16,6 +16,18 @@ import importlib
 from requests.exceptions import ReadTimeout
 
 
+def clip_path_length(path: str | Path, max_path_length: int = 255) -> str | Path:
+    """
+    Prevents OSError: [Errno 36] File name too long, but clipping path
+    name components to max_path_length Unicode characters.
+    """
+    output_type = str
+    if isinstance(path, Path):
+        path = str(path)
+        output_type = Path
+    return output_type(os.sep.join([i.encode('utf-8')[:max_path_length].decode('utf-8') for i in path.split(os.sep)]))
+
+
 def get_url_platform(track_url: str, logger: callable = print):
     """
     The function get_url_platform extracts the domain name from a given URL. If a
