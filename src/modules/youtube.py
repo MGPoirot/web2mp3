@@ -5,6 +5,7 @@ import os
 import yt_dlp
 import pytube
 from typing import Tuple, List
+from pathlib import Path
 
 # PSA: strictly define all substring patterns to avoid conflicts
 # the name of the module
@@ -149,10 +150,10 @@ def get_description(track_url: str, query: str | None = None, **kwargs) -> dict 
     return description
 
 
-def audio_download(youtube_url: str, audio_fname: str, quality:int,
+def audio_download(youtube_url: str, audio_fname: str | Path, quality:int,
                    logger=print):
     # ydl does not need the extension
-    fname, codec = audio_fname.split(os.extsep)
+    fname, codec = str(audio_fname).split(os.extsep)
 
     # Configure download settings
     ydl_opts = {
