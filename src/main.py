@@ -329,10 +329,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
         return f'Skipped: TrackExists "{track_uri}"'
 
     # Get a description of the object to use for matching
-    query = source.get_description(track_url=track_url,
-                                   logger=logger,
-                                   market=market,
-                                   print_space=ps)
+    query = source.get_description(track_url=track_url, market=market)
     if query is None:  # Failed to retrieve query
         return f'Failed: Could not form {source.name.capitalize()} query'
 
@@ -360,7 +357,6 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
         return f'Failed: Could not match {source.name.capitalize()} to ' \
                f'{search.name.capitalize()} item'
 
-    breakpoint()
     track_uri, track_tags = source.sort_lookup(query, match_obj)
     tags_uri = get_tags_uri(track_tags)
     source_uri = source.url2uri(track_url)  # 1 id may >1 urls

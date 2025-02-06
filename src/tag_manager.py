@@ -32,13 +32,16 @@ def get_track_tags(track_item: dict, do_light=False) -> dict:
     if not do_light:
         album = track_item['album']
 
+        # As of November 27, 2024, Spotify deprecated several Web API endpoints,
+        # including those for audio features and audio analysis, citing security concerns.
         # Acquire additional information
-        features = timeout_handler(
-            func=spotify_api.audio_features,
-            tracks=track_item['uri'],
-        )[0]
-        if features is not None:
-            tag_dict.update({'bpm': int(features['tempo']), })
+        # features = timeout_handler(
+        #     func=spotify_api.audio_features,
+        #     tracks=track_item['uri'],
+        # )[0]
+        # if features is not None:
+        #     tag_dict.update({'bpm': int(features['tempo']), })
+
         # Disc information
         disc_num = track_item['disc_number']
         disc_max = timeout_handler(

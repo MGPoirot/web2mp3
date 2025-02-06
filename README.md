@@ -281,3 +281,15 @@ HiIB398G9unpNIO8IBU9ihkb8y7jhv7YIVOB_867vYIVGhuv78_vyuio68_n8og8oV8Log.
 
 ## Copyright and use
 Audio you download using this script can not contain third-party intellectual property (such as copyrighted material) unless you have permission from that party or are otherwise legally entitled to do so (including by way of any available exceptions or limitations to copyright or related rights provided for in European Union law). You are legally responsible for the Content you submit to the Service. 
+
+*  `python 3.15` or above
+*  `python-dotenv`
+*  `spotipy`
+*  `pytube`
+*  `yt-dlp`
+*  `ytmusicapi`
+*  `requests`
+*  `click`
+*  `eyed3`
+
+ffmpeg
