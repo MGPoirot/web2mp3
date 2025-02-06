@@ -237,6 +237,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         if is_meta_match and is_duration_match:
             logger(f'Clear {platform.name} match:'.ljust(ps), f'{tit_art}')
             match = platform.get_meta_info(item)
+            break
 
     # Without clear match provide the user with options:
     if match is None:
