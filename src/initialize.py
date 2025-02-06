@@ -235,27 +235,3 @@ def run_clean_up(prompt=True):
                 os.remove(daemon)
 
 
-# Pagination handling
-import spotipy
-offset = 0
-while True:
-    playlists = spotify_api.user_playlists('spotify', offset=offset)
-    for playlist in playlists['items']:
-        # Fetch detailed playlist info including followers
-        try:
-            playlist_details = spotify_api.playlist(playlist_id=playlist['id'])
-        except spotipy.exceptions.SpotifyException:
-            xx
-        # Get playlist name and number of followers
-        playlist_name = playlist_details['name']
-        followers_count = playlist_details['followers']['total']
-
-        # Only print playlists with 100k+ followers
-        #if followers_count >= 100000:
-        print(f"Playlist: {playlist_name}, Followers: {followers_count}")
-
-    # Check if there are more playlists to fetch
-    if playlists['next']:
-        offset += 50
-    else:
-        break
