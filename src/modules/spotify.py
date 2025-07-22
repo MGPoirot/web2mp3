@@ -54,7 +54,10 @@ def general_handler(url: str, method) -> list:
         object_items.extend(results['items'])
     if 'track' in object_items[0]:
         object_items = [i['track'] for i in object_items]
-    object_urls = [uri2url(t['id']) for t in object_items]
+    # TODO: Somehow, sometimes t is None when multiple URLs are provided?
+    # The current line fixes it, but what happens? Potentially returns empty list for unknown reason.
+    # object_urls = [uri2url(t['id']) for t in object_items]
+    object_urls = [uri2url(t['id']) for t in object_items if t is not None and t['id'] is not None]
 
     # omit objects that did not have a URL, such as unavailable content
     object_urls = [u for u in object_urls if u is not None]
@@ -89,10 +92,14 @@ def item2desc(item: dict) -> Tuple[str]:
     return item['title'], item['artist']
 
 
-def get_description(track_url: str, **kwargs) -> dict:
+def get_description(track_url: str, **kwargs) -> dict | None:
     market = kwargs['market']
     # Gets information about the track that will be used as query for matching
-    item = timeout_handler(spotify_api.track, track_url, market=market)
+    try:
+        item = timeout_handler(spotify_api.track, track_url, market=market)
+    except SpotifyException:
+        # The track was not found
+        return None
     item['title'] = item.pop('name')
     return get_track_tags(item)
 
@@ -148,5 +155,6 @@ def get_meta_info(item: dict) -> dict:
 
 
 def manual_handler(print_space=24, **kwargs) -> dict:
+    logger = print if 'logger' not in kwargs else kwargs['logger']
     logger('Provide manual track info: ')
     return manual_track_tags(print_space=print_space, **kwargs)

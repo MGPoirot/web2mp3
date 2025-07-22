@@ -17,10 +17,14 @@ def download_track(track_uri: str, logger: callable = print):
     :param logger:
     :return: Does not return anything
     """
+    conclusion = 'failed.'
     logger(f'Started download_track for "{track_uri}"')
 
     # Retrieve and extract song properties from the index
     download_info = index.read(track_uri)
+    if download_info is None:
+        logger('Download instructions are empty.')
+        logger(f'download_track {conclusion}')
 
     # Unpack kwargs from track tags
     settings = download_info['settings']
@@ -94,8 +98,6 @@ def download_track(track_uri: str, logger: callable = print):
         index.write(track_uri, overwrite=True)
         logger('Index item cleared to None.')
         conclusion = 'finished successfully.'
-    else:
-        conclusion = 'failed.'
     logger(f'download_track {conclusion}')
 
 
