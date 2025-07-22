@@ -322,7 +322,6 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     market = kwargs['market']
     do_overwrite = kwargs['do_overwrite']
     avoid_duplicates = kwargs['avoid_duplicates']
-    ps = kwargs['print_space']
     track_uri = source.url2uri(track_url)
 
     # Skip in case the URL is already in the database
@@ -413,6 +412,7 @@ def match_audio_with_tags(track_url: str, **kwargs):
         track_uri = source.url2uri(track_url)
     index.write(track_uri, overwrite=False)
 
+    # Nicely format any status string
     status = status.split(':')
     logger(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
 

@@ -75,7 +75,11 @@ def search_yt(query: str, market, limit=1) -> List[dict]:
     yt_search_results = []
     ytmusic = YTMusic(location=market)
     for filter in (None, 'songs', 'videos'):
-        results = ytmusic.search(query=query, filter=filter, limit=limit)
+        try:
+            results = ytmusic.search(query=query, filter=filter, limit=limit)
+        except KeyError:
+            # ytmusic error Unable to find 'header' using path ['header', 'musicCardShelf...']
+            results = []
         if any(results):
             if filter is None and 'Top result' in [r['category'] for r in results]:
                 yt_search_results.extend([r for r in results if r['category'] == 'Top result'])

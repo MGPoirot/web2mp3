@@ -186,24 +186,35 @@ index_path = home_dir / 'src' / 'index'
 # Ensure the index path exists
 index_path.mkdir(exist_ok=True)
 
-# Clean up logs on startup
+# Clean up to last 50 logs on startup
 for log_regex in (log_dir.format('*', 'json'), log_dir.format('*', 'txt')):
     fs = glob(log_regex)
-    for f in sorted(fs, key=lambda f: os.path.getmtime(f), reverse=True)[20:]:
+    for f in sorted(fs, key=lambda f: os.path.getmtime(f), reverse=True)[50:]:
         f.unlink()
 
-# Check if a COOKIE_FILE is set
-if not os.environ.get('COOKIE_FILE'):
+
+def auto_cookie() -> Path | str:
+    cookie_file = ''
     try:
-        cookie_file = next(home_dir.glob('**/*_cookies.txt'))
+        cookie_file = next(home_dir.glob('**/*cookies.txt'))
+        print(f'A cookie file was found: "{cookie_file}"')
     except StopIteration:
         # Warn the user of the limitations of not setting a COOKIE_FILE
         print('Warning: No COOKIE_FILE was found. \n'
               'Without COOKIE_FILE age restricted download will fail.')
-        cookie_file = ''
+    return cookie_file
+
+# Check if a COOKIE_FILE is set
+if not os.environ.get('COOKIE_FILE'):
+    cookie_file = auto_cookie()
     set_in_dot_env("COOKIE_FILE", cookie_file)
 else:
     cookie_file = os.environ.get('COOKIE_FILE')
+    if not os.path.isfile(cookie_file):
+        print(f'The cookie file specified does not exist: "{cookie_file}"')
+        cookie_file = auto_cookie()
+        if len(str(cookie_file)) > 0:
+            set_in_dot_env("COOKIE_FILE", cookie_file)
 
 
 # Access Spotify API
@@ -233,5 +244,10 @@ def run_clean_up(prompt=True):
         if rm_daemons in 'Yesyes':
             for daemon in daemons:
                 os.remove(daemon)
+            print('Daemons deleted.')
+        else:
+            print('Daemons untouched.')
 
 
+if __name__ == '__main__':
+    run_clean_up()
