@@ -28,7 +28,7 @@ def title_similarity(a: dict, b: dict) -> float | None:
              match. Returns `None` if either dictionary lacks a 'title' key.
     :rtype: float | None
     """
-    if 'title' not in a or 'title' not in b:
+    if 'title' not in a or 'title' not in b or a['title'] is None or b['title'] is None:
         return None
     return SequenceMatcher(None, a['title'].lower(), b['title'].lower()).ratio()
 
@@ -324,7 +324,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     avoid_duplicates = kwargs['avoid_duplicates']
     track_uri = source.url2uri(track_url)
 
-    # Skip in case the URL is already in the database
+    # Skip in case the URL is already in the index
     if index.has_uri(track_uri) and not do_overwrite:
         return f'Skipped: TrackExists "{track_uri}"'
 
@@ -365,9 +365,8 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     if file_from_tags_exists(track_tags, logger, avoid_duplicates):
         return 'Skipped: FileExists'
 
-    #  2) Check if the found tracks is already in the database
+    #  2) Check if the found tracks is already in the index
     if not do_overwrite:
-        # song_db_indices = sdb_get_uris()
         ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
         errs = [err for err, idx in ctrl if index.has_uri(idx)]
         if any(errs):
@@ -385,9 +384,9 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
 
 def match_audio_with_tags(track_url: str, **kwargs):
     """
-    This function matches a given URL, and writes what it found to the song
-    database, after which it calls this function again, but as a background
-    process, and finishes.
+    This function matches a given URL, and writes what it found to the index
+    after which it calls this function again, but as a background process,
+    and finishes.
     """
     ps = kwargs['print_space']
 
@@ -456,7 +455,11 @@ def main(**kwargs):
 
     # Process URLs that were already provided
     for url in urls:
-        # url = url.split('?')[0]  # sanitization
+        # Sanitization
+        # url = url.split('?')[0]
+        # Do not pass the content of an entire playlist but just the specific track
+        kwargs['urls'] = url
+        # Match audio and tags and write it to a file in the index
         match_audio_with_tags(url, **kwargs)
         # Start the daemons during the matching of further items
         if input_is('During', init_daemons):
