@@ -3,6 +3,7 @@ from utils import timeout_handler
 from tag_manager import get_track_tags, manual_track_tags
 from spotipy.exceptions import SpotifyException
 import requests
+import logging
 from typing import Tuple, List
 
 # PSA: strictly define all substring patterns to avoid conflicts
@@ -155,6 +156,6 @@ def get_meta_info(item: dict) -> dict:
 
 
 def manual_handler(print_space=24, **kwargs) -> dict:
-    logger = print if 'logger' not in kwargs else kwargs['logger']
-    logger('Provide manual track info: ')
+    logger: logging.Logger = kwargs.get('logger') or logging.getLogger(__name__)
+    logger.info('Provide manual track info: ')
     return manual_track_tags(print_space=print_space, **kwargs)

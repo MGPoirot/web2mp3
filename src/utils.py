@@ -16,6 +16,7 @@ import importlib
 from requests.exceptions import ReadTimeout
 
 
+import logging
 def clip_path_length(path: str | Path, max_path_length: int = 255) -> str | Path:
     """
     Prevents OSError: [Errno 36] File name too long, but clipping path
@@ -28,7 +29,7 @@ def clip_path_length(path: str | Path, max_path_length: int = 255) -> str | Path
     return output_type(os.sep.join([i.encode('utf-8')[:max_path_length].decode('utf-8') for i in path.split(os.sep)]))
 
 
-def get_url_platform(track_url: str, logger: callable = print):
+def get_url_platform(track_url: str, logger: logging.Logger | None = None):
     """
     The function get_url_platform extracts the domain name from a given URL. If a
      known domain is found in the URL, it returns the corresponding domain name
@@ -77,8 +78,12 @@ def get_url_platform(track_url: str, logger: callable = print):
             except ModuleNotFoundError:
                 return
             return module
-    logger(f'No pattern found in "{track_url}". '
-           f'Known patterns: {"; ".join(patterns)}')
+    logger = logger or logging.getLogger(__name__)
+    logger.warning(
+        'No pattern found in "%s". Known patterns: %s',
+        track_url,
+        '; '.join(patterns),
+    )
     return None
 
 
@@ -106,108 +111,6 @@ def shorten_url(url: str) -> str:
         url = url.split('/')[-1]
     return url.split('&')[0].split(':')[0]
 
-
-class Logger:
-    """
-    A class for logging information and errors to a file.
-
-    Attributes:
-        :attr path: The full path to the log file.
-        :type path: str
-        :attr verbose: Whether to print log messages to console as well.
-        :type verbose: bool
-    """
-
-    def __init__(self, full_path: Path = None, verbose=False):
-        """
-        Initializes the logger.
-
-        Args:
-            :param full_path: The full path to the log file.
-            :type full_path: Path or NoneType
-            :param verbose: Whether to print log messages to console as well.
-            :type verbose: bool
-
-        Raises:
-            :raises OSError: If `full_path` is not a valid path.
-        """
-        self.path = full_path
-        try:
-            os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        except OSError:
-            raise OSError(f'Not a valid path: "{self.path}"')
-            sys.exit()
-        self.verbose = verbose  # Always print if true
-
-        self.id = 0
-        if not self.path.is_file():
-            self.create_new()
-        else:
-            content = json_in(self.path)
-            if content is not None:
-                last_id = [k.split('-')[0] for k in content.keys()][0]
-                self.id = int(last_id) + 1
-        self(datetime.now().strftime("%Y-%m-%d %H:%M"))
-
-    def create_new(self):
-        json_out({}, self.path)
-
-    def __call__(self, *text, verbose=False):
-        """
-        Logs the given `text` with the name of the calling function.
-        The special thing about this logging function is that function output
-        will be sorted by the function that called it automatically in a dict
-        format.
-
-        Args:
-            :param text: The text to log.
-            :param verbose: Whether to print log messages to console as well.
-
-        Returns:
-            :return: None
-        """
-        # Find out who called the logger
-        curframe = inspect.currentframe()
-        calframe = inspect.getouterframes(curframe, 2)
-        caller = calframe[1][3]
-
-        # See if this caller has recently logged anything
-        log_dict = json_in(self.path)
-        if not isinstance(log_dict, Iterable):
-            log_dict = {'000-Unassigned': log_dict}
-        existing_caller_ids = [k for k in log_dict if caller in k]
-        if not any(existing_caller_ids):
-            caller_id = f'{self.id}{str(len(log_dict)).zfill(2)}-{caller}'
-            log_dict[caller_id] = []
-        else:
-            caller_id = existing_caller_ids[-1]
-
-        # Log text
-        log_dict[caller_id].append(' '.join(text))
-        json_out(log_dict, self.path)
-        if verbose or self.verbose:
-            print(*text)
-
-    def close(self):
-        """
-        Writes a closing timestamp to the log file.
-
-        Returns:
-            :return: None
-        """
-        self(datetime.now().strftime("%Y-%m-%d %H:%M"))
-
-    def rm(self):
-        """
-        Removes the log file from the filesystem.
-
-        Returns:
-            :return: None
-        """
-        try:
-            os.remove(self.path)
-        except FileNotFoundError:
-            pass
 
 
 def input_is(control: str, input_str: str) -> bool:
@@ -428,7 +331,7 @@ def sanitize_track_name(track_name: str) -> str:
     return track_name
 
 
-def track_exists(artist_p: str, track_p: str, logger: callable = print) -> list:
+def track_exists(artist_p: str, track_p: str, logger: logging.Logger | None = None) -> list:
     """
     Check if this song is already available, maybe in a different album
 
@@ -448,10 +351,12 @@ def track_exists(artist_p: str, track_p: str, logger: callable = print) -> list:
     filenames = [os.path.basename(f) for f in filepaths]
     existing_tracks = [fn for fn in filenames if pattern.search(fn)]
     if any(existing_tracks):
-        logger(f'FileExistsWarning: {track_p} - {artist_p}\n ',
-               *[f'{" " * 3}{i}){" " * 3}'
+        logger = logger or logging.getLogger(__name__)
+        logger.warning('FileExistsWarning: %s - %s', track_p, artist_p)
+        for _msg in [f'{" " * 3}{i}){" " * 3}'
                  f'{f.split(os.extsep)[0]}\n '
-                 for i, f in enumerate(existing_tracks, 1)])
+                 for i, f in enumerate(existing_tracks, 1)]:
+            logger.warning('%s', _msg)
     return existing_tracks
 
 
