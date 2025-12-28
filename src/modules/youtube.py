@@ -1,4 +1,5 @@
-from initialize import cookie_file
+from initialize import cookie_file, deno_bin, ytdlp_remote_components
+import logging
 from utils import input_is
 from ytmusicapi import YTMusic
 import os
@@ -102,7 +103,7 @@ def get_description(track_url: str, query: str | None = None, **kwargs) -> dict 
         :return: key information of the YouTube video as dict
         :rtype: dict or None
     """
-    logger = kwargs['logger'] if 'logger' in kwargs else print
+    logger: logging.Logger = kwargs.get('logger') or logging.getLogger(__name__)
     ps = kwargs['print_space'] if 'print_space' in kwargs else 0
     market = kwargs['market']
     if query is None:
@@ -113,7 +114,7 @@ def get_description(track_url: str, query: str | None = None, **kwargs) -> dict 
     search_result = search_yt(query, market, limit=1)[0]
 
     if search_result is None:
-        logger(f'ValueError:'.ljust(ps), f'No video found for "{track_url}"')
+        logger.warning('%s No video found for "%s"', 'ValueError:'.ljust(ps), track_url)
 
         # If default response is None we can request input from the user
         if kwargs['response'] is None:
@@ -154,9 +155,11 @@ def get_description(track_url: str, query: str | None = None, **kwargs) -> dict 
     return description
 
 
-def audio_download(youtube_url: str, audio_fname: str | Path, quality:int,
-                   logger=print):
+def audio_download(youtube_url: str, audio_fname: str | Path, quality:int, logger: logging.Logger | None = None) -> None:
     # ydl does not need the extension
+    logger = logger or logging.getLogger(__name__)
+
+    # TODO: can paths have periods?
     fname, codec = str(audio_fname).split(os.extsep)
 
     # Configure download settings
@@ -168,22 +171,40 @@ def audio_download(youtube_url: str, audio_fname: str | Path, quality:int,
             'preferredquality': quality,
         }],
         'outtmpl': fname,
+        "ffmpeg_location": "/usr/bin/ffmpeg",
     }
+
+    # --- EJS / JS challenge solving (YouTube) ---
+    # Use deno if configured/found; this is the equivalent of:
+    #   --js-runtimes "deno:/path/to/deno" --remote-components ejs:github
+    if deno_bin and os.path.isfile(deno_bin):
+        ydl_opts["js_runtimes"] = {
+            "deno": {"path": deno_bin}
+        }
+
+        # remote_components: use a list to avoid parsing differences
+        if ytdlp_remote_components:
+            # allow both "ejs:github" and "ejs:github,ejs:npm" from env
+            comps = [c.strip() for c in str(ytdlp_remote_components).split(",") if c.strip()]
+            ydl_opts["remote_components"] = comps
+    else:
+        logger.warning("DENO_BIN not configured/found; YouTube signature solving may fail")
+    
     if cookie_file:
         if os.path.isfile(cookie_file):
             print('Cookie file found:', cookie_file)
             ydl_opts.update({'cookiefile': str(cookie_file)})
         else:
-            logger('Provided cookiefile does noet exist. Ignored.')
+            logger.warning('Provided cookiefile does not exist. Ignored.')
     # Attempt download
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([youtube_url])
-        logger('Youtube download successful')
+        logger.info('YouTube download successful')
     except BaseException as e:
-        logger(f'Youtube download failed: {e}')
+        logger.error('YouTube download failed: %s', e)
         if not cookie_file:
-            logger('Warning: No COOKIE_FILE was found. Without COOKIE_FILE '
+            logger.warning('Warning: No COOKIE_FILE was found. Without COOKIE_FILE '
                    'file restricted download will fail.')
 
 

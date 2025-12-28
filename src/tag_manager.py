@@ -1,6 +1,7 @@
 from initialize import spotify_api
 from utils import input_is, flatten, timeout_handler
 from datetime import datetime
+import logging
 import eyed3
 import requests
 import shutil
@@ -136,6 +137,8 @@ def set_file_tags(mp3_tags: dict, file_name: str, audio_source_url=None,
     mp3_tags['disc_num'] = (mp3_tags['disc_num'], mp3_tags.pop('disc_max'))
 
     # Load the audio file
+    logger = logger or logging.getLogger(__name__)
+
     audiofile = eyed3.load(file_name)
 
     # Set the track metadata
@@ -153,20 +156,22 @@ def set_file_tags(mp3_tags: dict, file_name: str, audio_source_url=None,
             f'Meta Data Source: "{internet_radio_url}",'
         )
     audiofile.tag.save()
-    logger('Successfully written file meta data')
+    logger.info('Successfully written file meta data')
 
 
-def download_cover_img(cover_img_path: str, cover_img_url: str, logger=print,
+def download_cover_img(cover_img_path: str, cover_img_url: str, logger: logging.Logger | None = None,
                        print_space=24):
     """ Downloads an image from a URL and stores at a given path."""
     # Retrieve image
+    logger = logger or logging.getLogger(__name__)
+
     res = requests.get(cover_img_url, stream=True)
     # Save image
     if res.status_code == 200:
         try:
             with open(cover_img_path, 'wb') as f:
                 shutil.copyfileobj(res.raw, f)
-            logger('Image Downloaded'.ljust(print_space), f'"{cover_img_path}"')
+            logger.info('%s "%s"', 'Image Downloaded'.ljust(print_space), cover_img_path)
         except FileNotFoundError as e:
             raise FileNotFoundError(f'This folder was not suitable: "'
                                     f'{cover_img_path}"')

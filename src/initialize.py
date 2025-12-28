@@ -3,6 +3,7 @@ from urllib.error import HTTPError
 import dotenv
 from spotipy.oauth2 import SpotifyClientCredentials
 import os
+import shutil
 import spotipy
 import eyed3
 import re
@@ -61,6 +62,25 @@ def set_in_dot_env(key: str, value: str, overwrite=True) -> None:
         with open(ENV_PATH, 'w') as file:
             file.write(data)
     return
+
+
+def _auto_deno_bin() -> str:
+    # Prefer explicit env
+    p = os.environ.get("DENO_BIN")
+    if p and os.path.isfile(p) and os.access(p, os.X_OK):
+        return p
+
+    # PATH
+    p = shutil.which("deno")
+    if p and os.path.isfile(p) and os.access(p, os.X_OK):
+        return p
+
+    # Common root install
+    p = "/root/.deno/bin/deno"
+    if os.path.isfile(p) and os.access(p, os.X_OK):
+        return p
+
+    return ""
 
 
 def sfy_validator(ans: str) -> bool:
@@ -215,6 +235,28 @@ else:
         cookie_file = auto_cookie()
         if len(str(cookie_file)) > 0:
             set_in_dot_env("COOKIE_FILE", cookie_file)
+
+
+# Ensure DENO_BIN is set (optional but recommended for reliable yt-dlp EJS)
+if not os.environ.get("DENO_BIN"):
+    deno_bin = _auto_deno_bin()
+    if deno_bin:
+        set_in_dot_env("DENO_BIN", deno_bin)
+    else:
+        print(
+            "Warning: DENO_BIN not set and deno not found. "
+            "YouTube signature solving may fail (yt-dlp EJS)."
+        )
+dotenv.load_dotenv(ENV_PATH, override=True)
+
+# Ensure YTDLP_REMOTE_COMPONENTS is set
+if not os.environ.get("YTDLP_REMOTE_COMPONENTS"):
+    set_in_dot_env("YTDLP_REMOTE_COMPONENTS", "ejs:github")
+dotenv.load_dotenv(ENV_PATH, override=True)
+
+# Export as module-level variables for import by modules
+deno_bin = os.environ.get("DENO_BIN", "")
+ytdlp_remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github")
 
 
 # Access Spotify API

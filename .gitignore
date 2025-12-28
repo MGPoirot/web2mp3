@@ -1,15 +1,28 @@
-.*
-.*/
-__*/
+# Python bytecode
 *.pyc
-*.pkl
-*.pqt
-*.json
-*.txt
-!requirements.txt
-!.gitignore
-*_cookies.txt
-src/local
-src/index
-Music/
+__pycache__/
+
+# Local runtime / generated data
+.cache
+
+# Local scripts
 local/
+
+# Default music storage location
+Music/
+
+# Default log storage location
+.logs/
+
+# Daemon lock files
+.daemons/
+
+# Index files
+src/index
+
+# Environment / secrets
+.env
+
+# Session / auth artifacts
+*cookies.txt
+

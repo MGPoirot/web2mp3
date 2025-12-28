@@ -1,5 +1,7 @@
 from initialize import log_dir, default_location
-from utils import Logger, input_is, get_url_platform, shorten_url, \
+import logging
+from logging_setup import configure_logger
+from utils import input_is, get_url_platform, shorten_url, \
     get_path_components, track_exists, sanitize_track_name, strip_url, flatten
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
@@ -170,18 +172,18 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
     # Query the desired platform
     search_query = f'{query["title"]} {query["artist"]}'
     qstr = search_query if len(search_query) < 47 else search_query[:44] + '...'
-    logger(f'Searching {platform.name.capitalize()} for:'.ljust(ps), f'"{qstr}"'.ljust(50), "srt% tim% sim%")
+    logger.info('%s "%s" %s', f'Searching {platform.name.capitalize()} for:'.ljust(ps), qstr, 'srt% tim% sim%')
     items = platform.search(search_query, **kwargs)
 
     # Check if one of our search results matches our query
     if not any(items):
-        logger(f'No results found for {accept_origin} search.')
+        logger.info(f'No results found for {accept_origin} search.')
         return False
 
     # Check if essential fields are present
     valid_items = platform.validate_items(items)
     if not any(valid_items):
-        logger(f'No valid results found for {accept_origin} search.')
+        logger.info(f'No valid results found for {accept_origin} search.')
         return False
 
     # Read properties that we can use to find a match: 1) original soring,
@@ -223,7 +225,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         n_str = n if n in valid_items else 'X'
         similarity_scores = (key, duration, similarity)
         sim_strs = ' '.join([similarity_str(v) for v in similarity_scores])
-        logger(''.rjust(ps), f'{n_str}) {tit_art[:46].ljust(47)} {sim_strs}')
+        logger.info('%s %s', ''.rjust(ps), f'{n_str}) {tit_art[:46].ljust(47)} {sim_strs}')
 
         # Check if the item's duration difference from the target is acceptable
         is_duration_match = abs(key - 1) < duration_tolerance and bool(duration)
@@ -235,7 +237,7 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
         # Check if the search result is a match
         if is_meta_match and is_duration_match:
-            logger(f'Clear {platform.name} match:'.ljust(ps), f'{tit_art}')
+            logger.info('%s %s', f'Clear {platform.name} match:'.ljust(ps), tit_art)
             match = platform.get_meta_info(item)
             break
 
@@ -245,9 +247,9 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         # Set appropriate response
         if default_response is not None:
             proceed = default_response
-            logger(no_match_status.format(f'Default to {proceed}'))
+            logger.info(no_match_status.format(f'Default to {proceed}'))
         else:
-            logger(no_match_status.format('Select'))
+            logger.info(no_match_status.format('Select'))
             if any(items):
                 item_options = '/'.join([str(i + 1)
                                          for i in range(len(items))]) + '/'
@@ -267,14 +269,14 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
                 proceed += 1
             idx = proceed - 1
             if idx > len(items) or idx < 0:
-                logger(f'Invalid index {idx + 1} for {len(items)} options.')
+                logger.info(f'Invalid index {idx + 1} for {len(items)} options.')
             else:
                 match = platform.get_meta_info(items[idx])
                 tit_art = f'{match["title"]} - {match["artist"]}'
-                logger(f'Match accepted by {accept_origin}:'.ljust(ps), tit_art)
+                logger.info('%s %s', f'Match accepted by {accept_origin}:'.ljust(ps), tit_art)
 
         elif input_is('Retry', proceed):
-            logger(f'Provide new info for {platform.name} query: ')
+            logger.info(f'Provide new info for {platform.name} query: ')
             search_query = input('>>> Track name and artist? '
                                  ''.ljust(ps))
             query['title'] = search_query
@@ -288,10 +290,10 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
 
         elif input_is('Change market', proceed):
             market = input('>>> Market code?'.ljust(ps)) or None
-            logger('Market changed to:'.ljust(ps))
+            logger.info('Market changed to:'.ljust(ps))
             kwargs['market'] = market
         else:
-            logger(f'Invalid input "{proceed}"')
+            logger.info(f'Invalid input "{proceed}"')
 
     # Give it another try with our updated arguments
     if match is None and default_response is None:
@@ -392,14 +394,18 @@ def match_audio_with_tags(track_url: str, **kwargs):
 
     # Create a logger object for this URL
     logger_path = log_dir.format(shorten_url(track_url), 'json')
-    logger = Logger(logger_path, verbose=True)
+    logger = configure_logger(
+        name=f"web2mp3.match.{shorten_url(track_url)}",
+        log_file=logger_path,
+        console=not kwargs.get('headless', False),
+    )
 
     # Get the source platform module and the platform we need to match it with
     source = get_url_platform(track_url)
     if source is None:  # matching failed
         return f'UnknownPlatform "{track_url}"'
     else:
-        logger(f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
+        logger.info('%s %s', f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
     
     search_result = do_match(track_url, source, logger, **kwargs)
     if isinstance(search_result, tuple):
@@ -413,7 +419,7 @@ def match_audio_with_tags(track_url: str, **kwargs):
 
     # Nicely format any status string
     status = status.split(':')
-    logger(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
+    logger.info(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
 
 
 def unpack_url(url: str) -> list:
