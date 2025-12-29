@@ -18,7 +18,6 @@ import logging
 from functools import lru_cache
 from types import ModuleType
 import pkgutil
-from typing import Iterable, Iterator
 
 
 @lru_cache(maxsize=1)
@@ -270,12 +269,6 @@ json_in = in_wrapper(json)
 json_out = out_wrapper(json, indent=4, sort_keys=True)
 pickle_in = in_wrapper(pickle)
 pickle_out = out_wrapper(pickle)
-
-
-def iter_unpacked_urls(urls: Iterable[str]) -> Iterator[str]:
-    for u in urls:
-        for x in unpack_url(u):
-            yield x
 
 
 def flatten(lst: list) -> list:
