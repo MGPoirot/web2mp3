@@ -1,6 +1,6 @@
 from initialize import log_dir, default_location
 import logging
-from logging_setup import configure_logger
+from logging_setup import configure_logger, close_logger_handlers
 from utils import input_is, get_url_platform, shorten_url, \
     get_path_components, track_exists, sanitize_track_name, strip_url, flatten
 from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
@@ -13,6 +13,7 @@ from click import Choice
 from typing import List
 from difflib import SequenceMatcher
 import unicodedata
+from typing import Iterable, Iterator
 
 
 def similarity_str(sim_score: float | None) -> str:
@@ -378,7 +379,6 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     if tags_uri != 'manual':
         index.write(tags_uri)
     index.write(track_uri, tags=track_tags, settings=kwargs, overwrite=True)
-
     return f'Success: Download added.\n' \
            f'    -> TAG   {tags_uri}\n' \
            f'    -> AUDIO {track_uri}'
@@ -392,7 +392,6 @@ def match_audio_with_tags(track_url: str, **kwargs):
     """
     ps = kwargs['print_space']
 
-    # Create a logger object for this URL
     logger_path = log_dir.format(shorten_url(track_url), 'json')
     logger = configure_logger(
         name=f"web2mp3.match.{shorten_url(track_url)}",
@@ -400,27 +399,30 @@ def match_audio_with_tags(track_url: str, **kwargs):
         console=not kwargs.get('headless', False),
     )
 
-    # Get the source platform module and the platform we need to match it with
-    source = get_url_platform(track_url)
-    if source is None:  # matching failed
-        return f'UnknownPlatform "{track_url}"'
-    else:
-        logger.info('%s %s', f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
-    
-    search_result = do_match(track_url, source, logger, **kwargs)
-    if isinstance(search_result, tuple):
-        status, tags_uri, source_uri, track_uri = search_result
-        index.write(tags_uri, overwrite=False)
-        index.write(source_uri, overwrite=False)
-    else:
-        status = search_result
-        track_uri = source.url2uri(track_url)
-    index.write(track_uri, overwrite=False)
+    try:
+        # Get the source platform module and the platform we need to match it with
+        source = get_url_platform(track_url)
+        if source is None:  # matching failed
+            return f'UnknownPlatform "{track_url}"'
+        else:
+            logger.info('%s %s', f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
+        
+        search_result = do_match(track_url, source, logger, **kwargs)
+        if isinstance(search_result, tuple):
+            status, tags_uri, source_uri, track_uri = search_result
+            index.write(tags_uri, overwrite=False)
+            index.write(source_uri, overwrite=False)
+        else:
+            status = search_result
+            track_uri = source.url2uri(track_url)
+        index.write(track_uri, overwrite=False)
 
-    # Nicely format any status string
-    status = status.split(':')
-    logger.info(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
-
+        # Nicely format any status string
+        status = status.split(':')
+        logger.info(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
+    finally:
+        # Critical: release the per-URL log file handle(s).
+        close_logger_handlers(logger)
 
 def unpack_url(url: str) -> list:
     # Skip empty URL
@@ -447,20 +449,23 @@ def unpack_url(url: str) -> list:
     return urls
 
 
+def iter_unpacked_urls(urls: Iterable[str]) -> Iterator[str]:
+    for u in urls:
+        for x in unpack_url(u):
+            yield x
+
+
 def main(**kwargs):
     # Get arguments
     ps = kwargs['print_space']
-    urls = kwargs['urls']
+    raw_urls = kwargs['urls']
     init_daemons = kwargs['init_daemons']
     headless = kwargs['headless']
     max_daemons = kwargs['max_daemons']
     verbose = kwargs['verbose']
 
     # Unpack URLs that contain playlists or albums
-    urls = flatten([unpack_url(u) for u in urls])
-
-    # Process URLs that were already provided
-    for url in urls:
+    for url in iter_unpacked_urls(raw_urls):
         # Sanitization
         # url = url.split('?')[0]
         # Do not pass the content of an entire playlist but just the specific track
