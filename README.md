@@ -239,6 +239,20 @@ nothing left. Since DAEMONs are headless by default, they store logbooks to the
      matching phase first, and only start downloads later (manually) to avoid
      overlapping Spotify calls with other network activity.
 
+### Spotify throttling behavior
+
+Spotify rate limiting is calculated over a rolling 30-second window. If the app receives an HTTP 429 from Spotify, Web2MP3 will:
+
+1) Log the throttling event including the `Retry-After` value when provided.
+
+2) Wait for `Retry-After` seconds (or fall back to a capped exponential backoff if the header is missing), retrying up to `--max-time-outs`.
+
+3) After the first 429 is observed, enable pacing for subsequent Spotify Web API calls: enforce a minimum of 0.4 seconds between Spotify API calls (≈150 calls/minute) to stay under the commonly observed ~180 calls/minute ceiling.
+
+References:
+- Repeated HTTP 429 discussion (Spotipy): https://stackoverflow.com/questions/78411698/spotify-api-repeated-http-429-error-using-spotipy
+- 180 calls/minute statement (example call limiting writeup): https://medium.com/mendix/limiting-your-amount-of-calls-in-mendix-most-of-the-time-rest-835dde55b10e
+
 DAEMONs can then be initiated manually by running `python download_daemon.py`.
 You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run download_daemon.py in verbose mode and do not want all tasks in the SDB
 to be processed straight away.

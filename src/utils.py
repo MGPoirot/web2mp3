@@ -440,23 +440,18 @@ def call_with_backoff(
     max_sleep_s: float = 60.0,
     **kwargs,
 ):
-    """Call *func* with throttling-aware retries.
+    """Call *func* with generic, platform-agnostic retries.
 
-    - For Spotify 429 responses (Spotipy's SpotifyException with http_status==429),
-      prefer the Retry-After header when available.
-    - Falls back to exponential backoff with a small jitter.
-    - Also retries on network timeouts.
+    This is intentionally NOT Spotify-specific.
+
+    - Retries on timeouts/connection flakiness.
+    - Retries on HTTP 429 when the caller raises `requests.exceptions.HTTPError`
+      with a populated `response` (so we can read Retry-After).
 
     Returns the function result.
 
     IMPORTANT: If retries are exhausted, this raises RuntimeError.
     """
-
-    # local import so utils.py stays importable even when spotipy isn't installed
-    try:
-        from spotipy.exceptions import SpotifyException  # type: ignore
-    except Exception:  # pragma: no cover
-        SpotifyException = ()  # type: ignore
 
     logger = logger or logging.getLogger(__name__)
 
@@ -505,25 +500,6 @@ def call_with_backoff(
             sleep(wait_s)
             continue
 
-        except SpotifyException as e:  # type: ignore
-            http_status = getattr(e, "http_status", None)
-            if http_status != 429:
-                raise
-
-            last_exc = e
-            headers = getattr(e, "headers", None) or getattr(e, "response_headers", None)
-            retry_after = _parse_retry_after_seconds(headers)
-            if retry_after is None:
-                retry_after = min(base_sleep_s * (2 ** (attempt - 1)), max_sleep_s)
-                retry_after += random.random()  # jitter
-
-            _notify(
-                f"Spotify throttling (HTTP 429) on {getattr(func, '__name__', func)}; "
-                f"Retry-After={float(retry_after):.1f}s ({attempt}/{max_retries})"
-            )
-            sleep(float(retry_after))
-            continue
-
         except requests.exceptions.HTTPError as e:
             # Some call paths may raise HTTPError directly.
             resp = getattr(e, "response", None)
@@ -549,22 +525,17 @@ def call_with_backoff(
     ) from last_exc
 
 
-def timeout_handler(func, *args, **kwargs):
-    # Backward-compatible wrapper kept because many modules import it.
-    # You can also pass max_time_outs=N to override.
+def general_timeout_handler(func, *args, **kwargs):
+    """Generic timeout handler.
+
+    Kept for backward compatibility with the old name `timeout_handler`.
+    This is platform-agnostic and does NOT contain Spotify 429 logic.
+
+    You can pass max_time_outs=N to override.
+    """
+
     max_time_outs = int(kwargs.pop("max_time_outs", 10))
     logger = kwargs.pop("_logger", None) or kwargs.pop("__logger", None)
-    """
-    The Spotify API might return HTTPSTimeOutErrors, not frequently, but it can
-    happen. In these cases, we do not want to give up and call the entire
-    matching process quits right away. Instead, we wait for a second and try
-    again. This number defines how many times we will reattempt before we give
-    up.
-    :param func:    Spotify API method to perform
-    :param args:    args to func
-    :param kwargs:  kwargs to func
-    :return:        None
-    """
     return call_with_backoff(
         func,
         *args,
@@ -572,6 +543,10 @@ def timeout_handler(func, *args, **kwargs):
         max_retries=max_time_outs,
         **kwargs,
     )
+
+
+# Backward-compatible alias.
+timeout_handler = general_timeout_handler
 
 
 def unique_fname(file_path: str | Path) -> str | Path:
