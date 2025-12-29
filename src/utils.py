@@ -14,9 +14,42 @@ from collections.abc import Iterable
 import modules
 import importlib
 from requests.exceptions import ReadTimeout
-
-
 import logging
+from functools import lru_cache
+from types import ModuleType
+import pkgutil
+from typing import Iterable, Iterator
+
+
+@lru_cache(maxsize=1)
+def _build_platform_pattern_index() -> dict[str, str]:
+    """
+    Build a mapping from URL substring pattern -> module name (domain).
+    Runs once per process.
+    """
+    patterns: dict[str, str] = {}
+
+    # modules is your package; pkgutil iterates without opening lots of handles repeatedly
+    for m in pkgutil.iter_modules(modules.__path__):
+        if m.ispkg:
+            continue
+
+        mod = import_module(f"{modules.__name__}.{m.name}")
+
+        # Expect each module to define: name (e.g. 'spotify') and url_patterns (iterable of substrings)
+        url_patterns = getattr(mod, "url_patterns", None)
+        domain = getattr(mod, "name", None)
+
+        if not domain or not url_patterns:
+            continue
+
+        for p in url_patterns:
+            # last write wins; you could warn on duplicates if you want
+            patterns[str(p)] = str(domain)
+
+    return patterns
+
+
 def clip_path_length(path: str | Path, max_path_length: int = 255) -> str | Path:
     """
     Prevents OSError: [Errno 36] File name too long, but clipping path
@@ -27,6 +60,7 @@ def clip_path_length(path: str | Path, max_path_length: int = 255) -> str | Path
         path = str(path)
         output_type = Path
     return output_type(os.sep.join([i.encode('utf-8')[:max_path_length].decode('utf-8') for i in path.split(os.sep)]))
+
 
 
 def get_url_platform(track_url: str, logger: logging.Logger | None = None):
@@ -59,30 +93,20 @@ def get_url_platform(track_url: str, logger: logging.Logger | None = None):
         > get_url_platform('https://on.soundcloud.com/H4C3V')
         'soundcloud'
     """
-
-    patterns = {}
-    for module_path in Path(modules.__path__._path[0]).glob('*.py'):
-        modules_name = modules.__name__
-        module_name = module_path.stem
-        # imports the module
-        importlib.__import__(f'{modules_name}.{module_name}', module_name)
-        # gets the imported module
-        module = __import__(f'{modules_name}.{module_name}', fromlist=[''])
-        patterns.update({p: module.name for p in module.url_patterns})
+    patterns = _build_platform_pattern_index()
 
     for pattern, domain in patterns.items():
         if pattern in track_url:
-            # Identify the platform where the URL is from
             try:
-                module = import_module(f'modules.{domain}')
+                return import_module(f"modules.{domain}")
             except ModuleNotFoundError:
-                return
-            return module
+                return None
+
     logger = logger or logging.getLogger(__name__)
     logger.warning(
         'No pattern found in "%s". Known patterns: %s',
         track_url,
-        '; '.join(patterns),
+        '; '.join(patterns.keys()),
     )
     return None
 
@@ -248,6 +272,12 @@ pickle_in = in_wrapper(pickle)
 pickle_out = out_wrapper(pickle)
 
 
+def iter_unpacked_urls(urls: Iterable[str]) -> Iterator[str]:
+    for u in urls:
+        for x in unpack_url(u):
+            yield x
+
+
 def flatten(lst: list) -> list:
     """
     Flattens a nested list that contains sub-lists.
@@ -344,20 +374,27 @@ def track_exists(artist_p: str, track_p: str, logger: logging.Logger | None = No
     :param print_space:   spacing of spaces
     :return:
     """
+    pattern = re.compile(
+        re.escape(track_p).replace(r"\ ", r"[\s_]*"),
+        re.IGNORECASE | re.UNICODE,
+    )
 
-    pattern = re.compile(re.escape(track_p).replace(r'\ ', r'[\s_]*'),
-                         re.IGNORECASE | re.UNICODE)
-    filepaths = iglob(os.path.join(music_dir, artist_p, '*', '*.mp3'))
-    filenames = [os.path.basename(f) for f in filepaths]
-    existing_tracks = [fn for fn in filenames if pattern.search(fn)]
-    if any(existing_tracks):
+    glob_pat = os.path.join(music_dir, artist_p, "*", "*.mp3")
+    matches: list[str] = []
+
+    # Stream results; no intermediate "filenames = [...]"
+    for fpath in iglob(glob_pat):
+        fn = os.path.basename(fpath)
+        if pattern.search(fn):
+            matches.append(fn)
+
+    if matches:
         logger = logger or logging.getLogger(__name__)
-        logger.warning('FileExistsWarning: %s - %s', track_p, artist_p)
-        for _msg in [f'{" " * 3}{i}){" " * 3}'
-                 f'{f.split(os.extsep)[0]}\n '
-                 for i, f in enumerate(existing_tracks, 1)]:
-            logger.warning('%s', _msg)
-    return existing_tracks
+        logger.warning("FileExistsWarning: %s - %s", track_p, artist_p)
+        for i, fn in enumerate(matches, 1):
+            logger.warning("   %s)   %s\n ", i, fn.split(os.extsep)[0])
+
+    return matches
 
 
 def get_path_components(mp3_tags: dict) -> list:

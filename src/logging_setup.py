@@ -60,3 +60,20 @@ def configure_logger(
             logger.addHandler(fh)
 
     return logger
+
+
+def close_logger_handlers(logger: logging.Logger) -> None:
+    # Close and detach handlers to release file descriptors.
+    for h in list(logger.handlers):
+        try:
+            h.flush()
+        except Exception:
+            pass
+        try:
+            h.close()
+        except Exception:
+            pass
+        logger.removeHandler(h)
+
+    # Also avoid propagation creating duplicate handlers upstream.
+    logger.propagate = False
