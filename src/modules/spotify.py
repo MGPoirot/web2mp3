@@ -23,7 +23,8 @@ album_identifier = '/album/'
 
 def url_unshortner(object_url: str) -> str:
     if 'spotify.link' in object_url:
-        r = requests.head(object_url, allow_redirects=True)
+        # Don't allow this to block forever on a flaky network
+        r = requests.head(object_url, allow_redirects=True, timeout=15)
         object_url = r.url
     return object_url
 
@@ -41,6 +42,10 @@ def general_handler(url: str, method) -> list:
     uri = url2uri(url, raw=True)
     try:
         results = timeout_handler(method, uri)['tracks']
+    except RuntimeError as e:
+        # Exhausted retries (likely heavy throttling)
+        print(str(e))
+        return []
     except SpotifyException as e:
         mtd = method.__name__.capitalize()
         if e.http_status == 404:
@@ -51,7 +56,12 @@ def general_handler(url: str, method) -> list:
         return []
     object_items = results['items']
     while results['next']:
-        results = spotify_api.next(results)
+        # spotify_api.next may also be throttled (HTTP 429)
+        try:
+            results = timeout_handler(spotify_api.next, results)
+        except RuntimeError as e:
+            print(str(e))
+            return []
         object_items.extend(results['items'])
     if 'track' in object_items[0]:
         object_items = [i['track'] for i in object_items]
@@ -97,12 +107,26 @@ def get_description(track_url: str, **kwargs) -> dict | None:
     market = kwargs['market']
     # Gets information about the track that will be used as query for matching
     try:
-        item = timeout_handler(spotify_api.track, track_url, market=market)
+        item = timeout_handler(
+            spotify_api.track,
+            track_url,
+            market=market,
+            max_time_outs=kwargs.get("max_time_outs", 10),
+            _logger=kwargs.get("logger"),
+        )
+    except RuntimeError:
+        # Retries exhausted (most commonly due to heavy throttling)
+        return None
     except SpotifyException:
         # The track was not found
         return None
-    item['title'] = item.pop('name')
-    return get_track_tags(item)
+
+    if not item:
+        return None
+
+    # Be defensive: don't assume Spotify response is always populated.
+    item['title'] = item.pop('name', None)
+    return get_track_tags(item, logger=kwargs.get("logger"))
 
 
 def url2uri(url: str, raw=False) -> str:
@@ -118,12 +142,18 @@ def uri2url(uri: str) -> str | None:
 def search(search_query, **kwargs) -> List[dict]:
     search_limit = kwargs['search_limit']
     market = kwargs['market']
-    results = spotify_api.search(
-        q=search_query,
-        limit=search_limit,
-        market=market,
-        type='track'
-    )
+    try:
+        results = timeout_handler(
+            spotify_api.search,
+            q=search_query,
+            limit=search_limit,
+            market=market,
+            type='track',
+            max_time_outs=kwargs.get("max_time_outs", 10),
+            _logger=kwargs.get("logger"),
+        )
+    except RuntimeError:
+        return []
     items = results['tracks']['items']
 
     # Rename track name to track title

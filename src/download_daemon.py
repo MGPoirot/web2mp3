@@ -3,7 +3,7 @@ from initialize import music_dir, daemon_dir, log_dir, disp_daemons, glob, Path
 import logging
 import subprocess
 import time
-from utils import get_url_platform, get_path_components, track_exists, clip_path_length
+from utils import get_url_platform, get_path_components, track_exists, clip_path_length, call_with_backoff
 import os
 import index
 from tag_manager import download_cover_img, set_file_tags
@@ -104,7 +104,14 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
         else:
             if cov_exists:
                 logger.info('%s "%s"', "File Overwritten:".ljust(ps), cov_fname)
-            download_cover_img(cov_fname, cover_url, logger=logger, print_space=ps)
+            # Cover downloads can also be throttled (HTTP 429). Respect Retry-After when present.
+            call_with_backoff(
+                download_cover_img,
+                cov_fname,
+                cover_url,
+                logger=logger,
+                print_space=ps,
+            )
 
         # Specify downloading method
         download_method = get_url_platform(track_uri)
@@ -116,7 +123,14 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
             os.remove(mp3_fname)
 
         # Download audio
-        download_method.audio_download(track_url, mp3_fname, preferred_quality, logger=logger)
+        # yt-dlp / HTTP calls may occasionally hit throttles too.
+        call_with_backoff(
+            download_method.audio_download,
+            track_url,
+            mp3_fname,
+            preferred_quality,
+            logger=logger,
+        )
 
         # Set file tags
         if os.path.isfile(mp3_fname):

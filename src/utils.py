@@ -8,12 +8,14 @@ import sys
 import re
 from glob import iglob
 from time import sleep
+import random
 from importlib import import_module
 from json.decoder import JSONDecodeError
 from collections.abc import Iterable
 import modules
 import importlib
 from requests.exceptions import ReadTimeout
+import requests
 import logging
 from functools import lru_cache
 from types import ModuleType
@@ -411,8 +413,147 @@ def strip_url(url: str) -> str:
     return url.split('://')[-1].split('www.')[-1]
 
 
+def _parse_retry_after_seconds(headers) -> int | None:
+    """Return Retry-After in seconds if present/parseable."""
+    if not headers:
+        return None
+    try:
+        # handle case-insensitivity and different header container types
+        for k in ("Retry-After", "retry-after", "RETRY-AFTER"):
+            if k in headers:
+                v = headers.get(k)
+                try:
+                    return int(float(v))
+                except (TypeError, ValueError):
+                    return None
+    except Exception:
+        return None
+    return None
+
+
+def call_with_backoff(
+    func,
+    *args,
+    logger: logging.Logger | None = None,
+    max_retries: int = 10,
+    base_sleep_s: float = 2.0,
+    max_sleep_s: float = 60.0,
+    **kwargs,
+):
+    """Call *func* with throttling-aware retries.
+
+    - For Spotify 429 responses (Spotipy's SpotifyException with http_status==429),
+      prefer the Retry-After header when available.
+    - Falls back to exponential backoff with a small jitter.
+    - Also retries on network timeouts.
+
+    Returns the function result.
+
+    IMPORTANT: If retries are exhausted, this raises RuntimeError.
+    """
+
+    # local import so utils.py stays importable even when spotipy isn't installed
+    try:
+        from spotipy.exceptions import SpotifyException  # type: ignore
+    except Exception:  # pragma: no cover
+        SpotifyException = ()  # type: ignore
+
+    logger = logger or logging.getLogger(__name__)
+
+    def _notify(message: str) -> None:
+        """Surface throttling/timeout waits to the user.
+
+        Many runs *do* have a StreamHandler attached to the logger (console),
+        in which case printing as well would duplicate messages. We therefore:
+        - always log (best effort)
+        - only print to stderr if the logger has no StreamHandler
+        """
+
+        try:
+            logger.warning("%s", message)
+        except Exception:
+            pass
+
+        has_stream_handler = False
+        try:
+            for h in getattr(logger, "handlers", []) or []:
+                if isinstance(h, logging.StreamHandler):
+                    has_stream_handler = True
+                    break
+        except Exception:
+            has_stream_handler = False
+
+        if not has_stream_handler:
+            try:
+                sys.stderr.write(message + "\n")
+                sys.stderr.flush()
+            except Exception:
+                pass
+    last_exc: Exception | None = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            return func(*args, **kwargs)
+
+        except (TimeoutError, ReadTimeout) as e:
+            last_exc = e
+            wait_s = min(base_sleep_s * attempt, max_sleep_s)
+            _notify(
+                f"Timeout while calling {getattr(func, '__name__', func)}; "
+                f"sleeping {wait_s:.1f}s ({attempt}/{max_retries})"
+            )
+            sleep(wait_s)
+            continue
+
+        except SpotifyException as e:  # type: ignore
+            http_status = getattr(e, "http_status", None)
+            if http_status != 429:
+                raise
+
+            last_exc = e
+            headers = getattr(e, "headers", None) or getattr(e, "response_headers", None)
+            retry_after = _parse_retry_after_seconds(headers)
+            if retry_after is None:
+                retry_after = min(base_sleep_s * (2 ** (attempt - 1)), max_sleep_s)
+                retry_after += random.random()  # jitter
+
+            _notify(
+                f"Spotify throttling (HTTP 429) on {getattr(func, '__name__', func)}; "
+                f"Retry-After={float(retry_after):.1f}s ({attempt}/{max_retries})"
+            )
+            sleep(float(retry_after))
+            continue
+
+        except requests.exceptions.HTTPError as e:
+            # Some call paths may raise HTTPError directly.
+            resp = getattr(e, "response", None)
+            status = getattr(resp, "status_code", None)
+            if status != 429:
+                raise
+
+            last_exc = e
+            retry_after = _parse_retry_after_seconds(getattr(resp, "headers", None))
+            if retry_after is None:
+                retry_after = min(base_sleep_s * (2 ** (attempt - 1)), max_sleep_s)
+                retry_after += random.random()
+
+            _notify(
+                f"HTTP 429 throttling on {getattr(func, '__name__', func)}; "
+                f"Retry-After={float(retry_after):.1f}s ({attempt}/{max_retries})"
+            )
+            sleep(float(retry_after))
+            continue
+
+    raise RuntimeError(
+        f"Rate-limit retries exhausted calling {getattr(func, '__name__', func)}"
+    ) from last_exc
+
+
 def timeout_handler(func, *args, **kwargs):
-    max_time_outs = 10
+    # Backward-compatible wrapper kept because many modules import it.
+    # You can also pass max_time_outs=N to override.
+    max_time_outs = int(kwargs.pop("max_time_outs", 10))
+    logger = kwargs.pop("_logger", None) or kwargs.pop("__logger", None)
     """
     The Spotify API might return HTTPSTimeOutErrors, not frequently, but it can
     happen. In these cases, we do not want to give up and call the entire
@@ -424,20 +565,13 @@ def timeout_handler(func, *args, **kwargs):
     :param kwargs:  kwargs to func
     :return:        None
     """
-    outcome = None
-    n_timeouts = 0
-    while outcome is None:
-        try:
-            outcome = func(*args, **kwargs)
-            return outcome
-        except (TimeoutError, ReadTimeout):
-            n_timeouts += 1
-            print(f'Encountered a TimeOutError... '
-                  f'waiting {n_timeouts}/{max_time_outs}')
-            if n_timeouts > max_time_outs:
-                return None
-            else:
-                sleep(1)
+    return call_with_backoff(
+        func,
+        *args,
+        logger=logger,
+        max_retries=max_time_outs,
+        **kwargs,
+    )
 
 
 def unique_fname(file_path: str | Path) -> str | Path:

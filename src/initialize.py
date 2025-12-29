@@ -260,8 +260,19 @@ ytdlp_remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github"
 
 
 # Access Spotify API
+#
+# Spotipy (requests) has no timeout by default, which can look like the CLI is
+# "hanging" indefinitely on a single Web API request.
+#
+# We set a finite request timeout and disable Spotipy's own retry/backoff so that
+# our explicit Retry-After-aware backoff logic (utils.call_with_backoff) is what
+# governs waiting/retrying.
 spotify_api = spotipy.Spotify(
-    client_credentials_manager=SpotifyClientCredentials()
+    client_credentials_manager=SpotifyClientCredentials(),
+    requests_timeout=float(os.environ.get("SPOTIFY_REQUEST_TIMEOUT", "15")),
+    retries=0,
+    status_retries=0,
+    backoff_factor=0,
 )
 
 
