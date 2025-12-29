@@ -346,8 +346,10 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
     if index.has_uri(track_uri) and not do_overwrite:
         return f'Skipped: TrackExists "{track_uri}"'
 
-    # Get a description of the object to use for matching
-    query = source.get_description(track_url=track_url, market=market)
+    # Get a description of the object to use for matching.
+    # IMPORTANT: forward CLI/runtime kwargs (e.g. max_time_outs) to the source.
+    # Some sources (notably Spotify) rely on these for retry/throttle handling.
+    query = source.get_description(track_url=track_url, logger=logger, **kwargs)
     if query is None:  # Failed to retrieve query
         return f'Failed: Could not form {source.name.capitalize()} query'
 
@@ -430,7 +432,13 @@ def match_audio_with_tags(track_url: str, **kwargs):
         else:
             status = search_result
             track_uri = source.url2uri(track_url)
-        index.write(track_uri, overwrite=False)
+
+        # Only clear an existing index entry.
+        # On failures that happen *before* an index item is created (e.g. Spotify
+        # throttling leading to "Failed: Could not form Spotify query"), we must
+        # NOT create an empty marker file, as that incorrectly signals completion.
+        if index.has_uri(track_uri):
+            index.write(track_uri, overwrite=False)
 
         # Nicely format any status string
         status = status.split(':')
