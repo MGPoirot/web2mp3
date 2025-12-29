@@ -182,21 +182,36 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
         return False
 
     # Check if essential fields are present
+    # We do not discard invalid items, but they will score badly
     valid_items = platform.validate_items(items)
+
+    # Tracks for which fields are missing or None are not valid options.
     if not any(valid_items):
         logger.info(f'No valid results found for {accept_origin} search.')
         return False
 
     # Read properties that we can use to find a match: 1) original soring,
     # 2) Duration, 3) Title, 4) a combination of duration and title.
-    # Tracks for which fields are missing or None are not valid options.
-    original_sorting = [i / (len(items) - 1) for i in range(len(items))][::-1]
+    # This was primarily useful when I had not implemented YTMusic API, and 
+    # I used the standard YouTube search sorting, which needed fine tuning to
+    # provide the best matches to Spotify tracks; but it is still useful to 
+    # validate the matching accuracy.
 
+    # Normalize sorting to [0, 1]
+    n = len(items)
+    if n <= 1:
+        original_sorting = [1.0] * n
+    else:
+        original_sorting = [1.0 - (i / (n - 1)) for i in range(n)]
+
+    # Normalize duration similarity to [0, 1]
     relative_d = platform.t_extractor(*items, query_duration=target_duration)
     d_similarity = [duration_similarity(d) for d in relative_d]
 
+    # Compute title similarity to [0, 1]
     t_similarity = [title_similarity(i, query) for i in items]
 
+    # Compute a combination similarity score
     combination = [similarity_mult(*s) for s in zip(d_similarity, t_similarity)]
 
     # Specify the key to be sorted by

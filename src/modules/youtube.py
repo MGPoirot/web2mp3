@@ -1,12 +1,18 @@
 from initialize import cookie_file, deno_bin, ytdlp_remote_components
 import logging
-from utils import input_is
-from ytmusicapi import YTMusic
 import os
 import yt_dlp
 import pytube
+import json
+import random
+import time
+import requests
+from utils import input_is
+from ytmusicapi import YTMusic
 from typing import Tuple, List
 from pathlib import Path
+from functools import lru_cache
+
 
 # PSA: strictly define all substring patterns to avoid conflicts
 # the name of the module
@@ -26,6 +32,11 @@ album_identifier = ' '  # YouTube does not have album object types
 
 playlist_handler = pytube.Playlist
 
+
+@lru_cache(maxsize=32)
+def _ytmusic_client(market: str) -> YTMusic:
+    # Cache one client per market/location to reuse sessions/headers.
+    return YTMusic(location=market)
 
 def url_unshortner(object_url: str) -> str:
     return object_url
@@ -66,28 +77,88 @@ def uri2url(uri: str) -> str:
     return f'https://www.youtube.com/watch?v={uri.split(".")[-1]}'
 
 
-def search_yt(query: str, market, limit=1) -> List[dict]:
+def _ytmusic_search_with_retry(
+    ytmusic: YTMusic,
+    *,
+    query: str,
+    filter: str | None,
+    limit: int,
+    logger: logging.Logger | None = None,
+    max_attempts: int = 5,
+    base_sleep: float = 0.5,
+) -> list[dict]:
+    """
+    Retry wrapper around ytmusic.search to handle transient non-JSON/empty/blocked responses.
+    """
+    logger = logger or logging.getLogger(__name__)
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return ytmusic.search(query=query, filter=filter, limit=limit)
+
+        except (json.JSONDecodeError, requests.RequestException) as e:
+            # Usually: empty body, HTML consent page, 403/429, transient 5xx, etc.
+            if attempt >= max_attempts:
+                logger.warning(
+                    "YTMusic search failed after %d attempts (filter=%s) for query=%r: %s",
+                    attempt, filter, query, e,
+                )
+                return []
+
+            # exponential backoff with jitter
+            sleep_s = base_sleep * (2 ** (attempt - 1)) + random.uniform(0, 0.25)
+            logger.info(
+                "YTMusic search transient failure (attempt %d/%d, filter=%s). "
+                "Sleeping %.2fs then retrying. Error: %s",
+                attempt, max_attempts, filter, sleep_s, e,
+            )
+            time.sleep(sleep_s)
+
+        except KeyError:
+            # Your existing known ytmusicapi parsing edge case
+            return []
+
+        except Exception as e:
+            # Unknown: don’t crash the whole run; treat as no results
+            logger.warning(
+                "YTMusic search unexpected error (filter=%s) query=%r: %s",
+                filter, query, e,
+            )
+            return []
+
+    return []  # unreachable
+
+
+def search_yt(query: str, market, limit=1, logger: logging.Logger | None = None) -> List[dict]:
     """
     This method prioritizes three search strategies:
     1. Top result of all videos
     2. Song videos
     3. Any videos
     """
-    yt_search_results = []
-    ytmusic = YTMusic(location=market)
+    logger = logger or logging.getLogger(__name__)
+
+    yt_search_results: list[dict] = []
+    ytmusic = _ytmusic_client(market)
+
     for filter in (None, 'songs', 'videos'):
-        try:
-            results = ytmusic.search(query=query, filter=filter, limit=limit)
-        except KeyError:
-            # ytmusic error Unable to find 'header' using path ['header', 'musicCardShelf...']
-            results = []
+        results = _ytmusic_search_with_retry(
+            ytmusic,
+            query=query,
+            filter=filter,
+            limit=limit,
+            logger=logger,
+        )
+
         if any(results):
-            if filter is None and 'Top result' in [r['category'] for r in results]:
-                yt_search_results.extend([r for r in results if r['category'] == 'Top result'])
+            if filter is None and 'Top result' in [r.get('category') for r in results]:
+                yt_search_results.extend([r for r in results if r.get('category') == 'Top result'])
             else:
                 yt_search_results.extend(results)
+
             if len(yt_search_results) >= limit:
                 break
+
     return yt_search_results[:limit]
 
 
@@ -213,6 +284,7 @@ def search(search_query, **kwargs) -> List[dict]:
         query=search_query,
         market=kwargs['market'],
         limit=kwargs['search_limit'],
+        logger=kwargs.get("logger"),
     )
 
 
