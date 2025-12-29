@@ -233,12 +233,17 @@ nothing left. Since DAEMONs are headless by default, they store logbooks to the
      DAEMONS will start downloading after completing the matching process of
      the track URL or playlist URL provided. This can be chosen if due to
      limited computing power, multiprocessing might destabilize your machine.
+  3. `'not'` or `'n'`
+     Do not start DAEMONs automatically. This is useful when you are hitting
+     Spotify Web API throttling (HTTP 429): it lets you complete the Spotify-heavy
+     matching phase first, and only start downloads later (manually) to avoid
+     overlapping Spotify calls with other network activity.
 
-DAEMONs can then be initiated manually by running `python download_daemons.py`.
-You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run download_daemons.py in verbose mode and do not want all tasks in the SDB
+DAEMONs can then be initiated manually by running `python download_daemon.py`.
+You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run download_daemon.py in verbose mode and do not want all tasks in the SDB
 to be processed straight away.
 
-* `max_daemons`: number of DAEMONS to spawn when download_daemons.py is called.
+* `max_daemons`: number of DAEMONS to spawn when download_daemon.py is called.
 Default is `4`. A higher number is faster but requires more computational power.
 
 **Verbose Mode**

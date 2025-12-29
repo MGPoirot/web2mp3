@@ -9,6 +9,11 @@ from typing import Dict
 
 eyed3.log.setLevel("ERROR")
 
+# Simple in-process caches to reduce Spotify call volume.
+# These are safe because they only memoize immutable Spotify metadata.
+_ARTIST_GENRES_CACHE: dict[str, str] = {}
+_ALBUM_DISC_MAX_CACHE: dict[str, int] = {}
+
 
 def get_tags_uri(track_tags: dict) -> str:
     """
@@ -18,7 +23,7 @@ def get_tags_uri(track_tags: dict) -> str:
     return track_tags['internet_radio_url'] if 'internet_radio_url' in track_tags else None
 
 
-def get_track_tags(track_item: dict, do_light=False) -> dict:
+def get_track_tags(track_item: dict, do_light: bool = False, logger: logging.Logger | None = None) -> dict:
     # in do_light mode we only get title and artist information;
     # just enough to do matching.
 
@@ -30,6 +35,8 @@ def get_track_tags(track_item: dict, do_light=False) -> dict:
         'title': track_item['title'],
         'artist': artists,
     }
+    logger = logger or logging.getLogger(__name__)
+
     if not do_light:
         album = track_item['album']
 
@@ -45,22 +52,40 @@ def get_track_tags(track_item: dict, do_light=False) -> dict:
 
         # Disc information
         disc_num = track_item['disc_number']
-        disc_max = timeout_handler(
-            func=spotify_api.album_tracks,
-            album_id=album['uri'],
-            offset=album['total_tracks'] - 1,
-        )['items'][-1]['disc_number']
+        album_uri = album.get('uri')
+        if album_uri in _ALBUM_DISC_MAX_CACHE:
+            disc_max = _ALBUM_DISC_MAX_CACHE[album_uri]
+        else:
+            disc_max = timeout_handler(
+                func=spotify_api.album_tracks,
+                album_id=album_uri,
+                offset=album['total_tracks'] - 1,
+                _logger=logger,
+            )['items'][-1]['disc_number']
+            _ALBUM_DISC_MAX_CACHE[album_uri] = disc_max
 
         # Track number information
         track_num = track_item['track_number']
         track_max = album['total_tracks']
 
         # Genre information
-        genres = [timeout_handler(
-            func=spotify_api.artist,
-            artist_id=a['uri']
-        )['genres'] for a in artist_items]
-        genres = '; '.join(flatten(genres))
+        genres_list = []
+        for a in artist_items:
+            a_uri = a.get('uri')
+            if not a_uri:
+                continue
+            if a_uri in _ARTIST_GENRES_CACHE:
+                genres_list.append(_ARTIST_GENRES_CACHE[a_uri])
+                continue
+            g = timeout_handler(
+                func=spotify_api.artist,
+                artist_id=a_uri,
+                _logger=logger,
+            ).get('genres', [])
+            g_str = '; '.join(g) if isinstance(g, list) else str(g)
+            _ARTIST_GENRES_CACHE[a_uri] = g_str
+            genres_list.append(g_str)
+        genres = '; '.join([g for g in genres_list if g])
         cover_img = album['images'][0]['url'] if any(album['images']) else None
         tags_uri = track_item['uri'].replace('track:', '').replace(':', '.')
         tag_dict.update({
@@ -165,7 +190,11 @@ def download_cover_img(cover_img_path: str, cover_img_url: str, logger: logging.
     # Retrieve image
     logger = logger or logging.getLogger(__name__)
 
-    res = requests.get(cover_img_url, stream=True)
+    # Don't allow this to block forever on a flaky network
+    res = requests.get(cover_img_url, stream=True, timeout=15)
+    if res.status_code == 429:
+        # Let higher-level callers apply Retry-After based backoff
+        raise requests.exceptions.HTTPError("HTTP 429", response=res)
     # Save image
     if res.status_code == 200:
         try:
