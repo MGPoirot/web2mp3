@@ -80,23 +80,52 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
         # Define paths
         album_dir = clip_path_length(music_dir / artist_p / album_p)
         tr_prefix = None if mp3_tags.get("track_num") is None else f'{mp3_tags["track_num"]} - '
-        cov_fname = album_dir / "folder.jpg"
         mp3_fname = album_dir / f"{tr_prefix}{track_p}.mp3"
         os.makedirs(album_dir, exist_ok=True)
 
+        art_fname = album_dir.parent / "artist.jpg"
+        art_exists = art_fname.is_file()
+
+        cov_fname = album_dir / "folder.jpg"
+        cov_exists = cov_fname.is_file()
+
         # Log storage locations
         logger.info('%s "%s"', "Album dir".ljust(ps), album_dir)
-        logger.info('%s "%s"', "Cover filename    ".ljust(ps), cov_fname)
         logger.info('%s "%s"', "MP3 Audio filename".ljust(ps), mp3_fname)
+        logger.info('%s "%s"', "Artist filename   ".ljust(ps), art_fname)
+        logger.info('%s "%s"', "Cover filename    ".ljust(ps), cov_fname)
 
-        # Download cover
+        # Download artist image (if available)
+        if "artist_image" not in mp3_tags:
+            logger.warning("KeyError: Artist Image URL was not set at all")
+            artist_url = None
+        else:
+            artist_url = mp3_tags.pop("artist_image")
+
+        # Download cover (if available)
         if "cover" not in mp3_tags:
             logger.warning("KeyError: Cover URL was not set at all")
             cover_url = None
         else:
             cover_url = mp3_tags.pop("cover")
 
-        cov_exists = os.path.isfile(cov_fname)
+        # Download artist image
+        if artist_url is None:
+            logger.warning("ValueError: No artist image URL set.")
+        elif art_exists and not do_overwrite:
+            logger.info('%s "%s"', "FileExistsWarning:".ljust(ps), art_fname)
+        else:
+            if art_exists:
+                logger.info('%s "%s"', "File Overwritten:".ljust(ps), art_fname)
+            call_with_backoff(
+                download_cover_img,
+                art_fname,
+                artist_url,
+                logger=logger,
+                print_space=ps,
+            )
+        
+        # Download cover image
         if cover_url is None:
             logger.warning("ValueError: No cover URL set.")
         elif cov_exists and not do_overwrite:

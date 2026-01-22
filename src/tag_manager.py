@@ -13,7 +13,7 @@ eyed3.log.setLevel("ERROR")
 # These are safe because they only memoize immutable Spotify metadata.
 _ARTIST_GENRES_CACHE: dict[str, str] = {}
 _ALBUM_DISC_MAX_CACHE: dict[str, int] = {}
-
+_ARTIST_IMAGE_CACHE: dict[str, str | None] = {}
 
 def get_tags_uri(track_tags: dict) -> str:
     """
@@ -37,73 +37,94 @@ def get_track_tags(track_item: dict, do_light: bool = False, logger: logging.Log
     }
     logger = logger or logging.getLogger(__name__)
 
-    if not do_light:
-        album = track_item['album']
+    if do_light:
+        return tag_dict
+    
+    album = track_item['album']
 
-        # As of November 27, 2024, Spotify deprecated several Web API endpoints,
-        # including those for audio features and audio analysis, citing security concerns.
-        # Acquire additional information
-        # features = timeout_handler(
-        #     func=spotify_api.audio_features,
-        #     tracks=track_item['uri'],
-        # )[0]
-        # if features is not None:
-        #     tag_dict.update({'bpm': int(features['tempo']), })
+    # As of November 27, 2024, Spotify deprecated several Web API endpoints,
+    # including those for audio features and audio analysis, citing security concerns.
+    # Acquire additional information
+    # features = timeout_handler(
+    #     func=spotify_api.audio_features,
+    #     tracks=track_item['uri'],
+    # )[0]
+    # if features is not None:
+    #     tag_dict.update({'bpm': int(features['tempo']), })
 
-        # Disc information
-        disc_num = track_item['disc_number']
-        album_uri = album.get('uri')
-        if album_uri in _ALBUM_DISC_MAX_CACHE:
-            disc_max = _ALBUM_DISC_MAX_CACHE[album_uri]
-        else:
-            disc_max = timeout_handler(
-                func=spotify_api.album_tracks,
-                album_id=album_uri,
-                offset=album['total_tracks'] - 1,
-                _logger=logger,
-            )['items'][-1]['disc_number']
-            _ALBUM_DISC_MAX_CACHE[album_uri] = disc_max
+    # Disc information
+    disc_num = track_item['disc_number']
+    album_uri = album.get('uri')
+    if album_uri in _ALBUM_DISC_MAX_CACHE:
+        disc_max = _ALBUM_DISC_MAX_CACHE[album_uri]
+    else:
+        disc_max = timeout_handler(
+            func=spotify_api.album_tracks,
+            album_id=album_uri,
+            offset=album['total_tracks'] - 1,
+            _logger=logger,
+        )['items'][-1]['disc_number']
+        _ALBUM_DISC_MAX_CACHE[album_uri] = disc_max
 
-        # Track number information
-        track_num = track_item['track_number']
-        track_max = album['total_tracks']
+    # Track number information
+    track_num = track_item['track_number']
+    track_max = album['total_tracks']
 
-        # Genre information
-        genres_list = []
-        for a in artist_items:
-            a_uri = a.get('uri')
-            if not a_uri:
-                continue
-            if a_uri in _ARTIST_GENRES_CACHE:
-                genres_list.append(_ARTIST_GENRES_CACHE[a_uri])
-                continue
-            g = timeout_handler(
+    # Genre information
+    genres_list = []
+    artist_image_url = None
+
+    for i, a in enumerate(artist_items):
+        a_uri = a.get('uri')
+        if not a_uri:
+            continue
+
+        # Prefer cached values
+        g_str = _ARTIST_GENRES_CACHE.get(a_uri)
+        img_url = _ARTIST_IMAGE_CACHE.get(a_uri)
+
+        if g_str is None or a_uri not in _ARTIST_IMAGE_CACHE:
+            a_meta = timeout_handler(
                 func=spotify_api.artist,
                 artist_id=a_uri,
                 _logger=logger,
-            ).get('genres', [])
+            ) or {}
+
+            g = a_meta.get('genres', [])
             g_str = '; '.join(g) if isinstance(g, list) else str(g)
             _ARTIST_GENRES_CACHE[a_uri] = g_str
+
+            imgs = a_meta.get('images', []) or []
+            img_url = imgs[0].get('url') if imgs else None
+            _ARTIST_IMAGE_CACHE[a_uri] = img_url
+
+        if g_str:
             genres_list.append(g_str)
-        genres = '; '.join([g for g in genres_list if g])
-        cover_img = album['images'][0]['url'] if any(album['images']) else None
-        tags_uri = track_item['uri'].replace('track:', '').replace(':', '.')
-        tag_dict.update({
-            'album': album['name'],
-            'album_artist': artist_items[0]['name'],
-            'artist': artists,
-            'cover': cover_img,
-            'disc_max': disc_max,
-            'disc_num': disc_num,
-            'duration': track_item['duration_ms'] / 1000,
-            'genre': genres,
-            'internet_radio_url': tags_uri,
-            'release_date': album['release_date'],
-            'recording_date': album['release_date'],
-            'tagging_date': datetime.now().strftime('%Y-%m-%d'),
-            'track_max': track_max,
-            'track_num': track_num,
-        })
+
+        # Use the primary artist image (first artist in list) when available
+        if i == 0 and img_url:
+            artist_image_url = img_url
+
+    genres = '; '.join([g for g in genres_list if g])
+    cover_img = album['images'][0]['url'] if any(album['images']) else None
+    tags_uri = track_item['uri'].replace('track:', '').replace(':', '.')
+    tag_dict.update({
+        'album': album['name'],
+        'album_artist': artist_items[0]['name'],
+        'artist': artists,
+        'cover': cover_img,
+        'artist_image': artist_image_url,  # <-- added
+        'disc_max': disc_max,
+        'disc_num': disc_num,
+        'duration': track_item['duration_ms'] / 1000,
+        'genre': genres,
+        'internet_radio_url': tags_uri,
+        'release_date': album['release_date'],
+        'recording_date': album['release_date'],
+        'tagging_date': datetime.now().strftime('%Y-%m-%d'),
+        'track_max': track_max,
+        'track_num': track_num,
+    })
     return tag_dict
 
 
