@@ -76,12 +76,21 @@ Web2mp3 aims to be a scalable tool. To this end, three features are paramount:
 
 **1. Input Sources**
 
-Both YouTube URLs as Spotify URLs are accepted. My advice is to primarily use 
-Spotify URLs, since YouTube URLs can include video clip chatter. SoundCloud 
-support is in development, to cover audio that is not available through YouTube. 
+Both YouTube URLs and Spotify URLs are accepted. SoundCloud support is in
+development, to cover audio that is not available through YouTube.
 
-Both single songs as collections are accepted such as YouTube playlists, Spotify
-Playlists and Spotify Albums.
+Both single tracks and collections are accepted: YouTube Music playlists,
+Spotify tracks, and Spotify albums.
+
+> **Note (early 2026): Spotify playlist support has been removed.**
+> In early 2026 Spotify substantially restricted their Web API. The
+> `GET /v1/playlists/{id}/items` endpoint now requires user-level OAuth and
+> is only accessible for playlists owned by or collaborated on by the
+> authenticated user. Development Mode apps additionally require every user
+> to be on the app allowlist. As a result, Spotify playlist support has been
+> dropped from Web2MP3. **Use YouTube Music playlist URLs instead**
+> (`https://music.youtube.com/playlist?list=...`). Spotify track and album
+> URLs continue to work normally.
 
 **2. Reliable matching**
 
@@ -151,7 +160,6 @@ Music
 Web2MP3 was tested on Windows and Linux. It requires minimal core dependencies. Starts with `ytmusicapi` to identify the video with the given URL. Then uses `spotipy` to get metadata. After which it uses `yt-dlp` to download audio, and finally `eye3d` for handling mp3 tags. `pytube` is optional to get a list of URLS from a playlist. See `requirements.txt`. Tested on Linux and Windows. In short:
 * Python `v3.10`: not compatible with lower versions because I like the clarity of type union type hinting (`str | Path`)
 * `eyed3`: Reading and writing MP3 tags 
-* `pytube`: Reading playlists of YouTube resources
 * `requests`: Unwrapping shortened Spotify URLs
 * `spotipy`: Reading metadata through the Spotify API 
 * `yt-dlp`: Downloading YouTube resources
@@ -304,7 +312,6 @@ Audio you download using this script can not contain third-party intellectual pr
 *  `python 3.15` or above
 *  `python-dotenv`
 *  `spotipy`
-*  `pytube`
 *  `yt-dlp`
 *  `ytmusicapi`
 *  `requests`

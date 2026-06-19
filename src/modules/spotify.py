@@ -4,8 +4,6 @@ from tag_manager import get_track_tags, manual_track_tags
 from spotipy.exceptions import SpotifyException
 import requests
 import logging
-import time
-import random
 from typing import Tuple, List
 
 # PSA: strictly define all substring patterns to avoid conflicts
@@ -23,129 +21,35 @@ playlist_identifier = '/playlist/'
 album_identifier = '/album/'
 
 
-class _SpotifyRateLimiter:
-    """A minimal rate limiter to avoid sustained Spotify throttling.
+def spotify_call_with_backoff(func, *args, logger: logging.Logger | None = None, **kwargs):
+    """Call a spotipy function and fail hard on HTTP 429.
 
-    Spotify rate limiting is based on a rolling window. Once we see an HTTP 429,
-    we switch into a paced mode where we ensure *subsequent* Spotify API calls
-    are spaced out (default 0.4s => max ~150 calls/min).
-
-    This doesn't guarantee avoiding 429s (other limits may apply), but it makes
-    our request pattern stable and helps recovery.
+    Spotify's Retry-After on a quota-exhausted 429 is measured in hours
+    (e.g. 76 000 s ≈ 21 h). Sleeping and retrying inside the same session
+    would block the process for the rest of the day without any guarantee of
+    recovery, so we raise immediately with a human-readable message instead.
     """
-
-    def __init__(self, paced_interval_s: float = 0.4, decay_s: float = 300.0):
-        self.paced_interval_s = float(paced_interval_s)
-        self.decay_s = float(decay_s)
-        self._paced_until_ts: float = 0.0
-        self._next_call_ts: float = 0.0
-
-    def note_throttled(self) -> None:
-        now = time.monotonic()
-        self._paced_until_ts = max(self._paced_until_ts, now + self.decay_s)
-
-    def maybe_sleep_before_call(self) -> None:
-        now = time.monotonic()
-        if now >= self._paced_until_ts:
-            return
-
-        # paced mode: enforce spacing
-        if now < self._next_call_ts:
-            time.sleep(self._next_call_ts - now)
-            now = time.monotonic()
-
-        self._next_call_ts = now + self.paced_interval_s
-
-
-_spotify_rl = _SpotifyRateLimiter()
-
-
-def _spotify_notify(logger: logging.Logger | None, message: str) -> None:
-    """Log once (no duplicate stderr printing)."""
-    if logger:
-        logger.warning("%s", message)
-    else:
-        # Fallback: avoid double prints; this should still be visible in CLI runs.
-        print(message)
-
-
-def spotify_call_with_backoff(
-    func,
-    *args,
-    logger: logging.Logger | None = None,
-    max_retries: int = 10,
-    base_sleep_s: float = 2.0,
-    max_sleep_s: float = 60.0,
-    paced_interval_s: float = 0.4,
-    **kwargs,
-):
-    """Spotify-specific backoff wrapper.
-
-    Behavior:
-    - Before every call, if we've been throttled recently, enforce pacing
-      (default 0.4s between calls => ~150 calls/min).
-    - On HTTP 429: use Retry-After when present; otherwise exponential backoff.
-    - Retry up to max_retries, then raise RuntimeError.
-
-    This wrapper is intentionally kept in the Spotify module (platform-specific).
-    """
-
-    # keep the limiter configured from call sites (if they override it)
-    _spotify_rl.paced_interval_s = float(paced_interval_s)
-
-    last_exc: Exception | None = None
-
-    for attempt in range(1, max_retries + 1):
-        # If we were throttled recently, keep the entire app in a paced mode.
-        _spotify_rl.maybe_sleep_before_call()
-
-        try:
-            return func(*args, **kwargs)
-
-        except SpotifyException as e:
-            if getattr(e, "http_status", None) != 429:
-                raise
-
-            last_exc = e
-            _spotify_rl.note_throttled()
-
-            headers = getattr(e, "headers", None) or getattr(e, "response_headers", None)
-            retry_after = _parse_retry_after_seconds(headers)
-            if retry_after is None:
-                retry_after = min(base_sleep_s * (2 ** (attempt - 1)), max_sleep_s)
-                retry_after += random.random()  # jitter
-
-            _spotify_notify(
-                logger,
-                f"Spotify throttling (HTTP 429) on {getattr(func, '__name__', func)}; "
-                f"Retry-After={float(retry_after):.1f}s ({attempt}/{max_retries})",
-            )
-            time.sleep(float(retry_after))
-            continue
-
-    raise RuntimeError(
-        f"Rate-limit retries exhausted calling {getattr(func, '__name__', func)}"
-    ) from last_exc
+    try:
+        return func(*args, **kwargs)
+    except SpotifyException as e:
+        if getattr(e, "http_status", None) != 429:
+            raise
+        headers = getattr(e, "headers", None) or getattr(e, "response_headers", None)
+        retry_after = _parse_retry_after_seconds(headers)
+        hint = (
+            f" Retry-After={retry_after:.0f}s ({retry_after / 3600:.1f}h)."
+            if retry_after is not None else ""
+        )
+        raise RuntimeError(
+            f"Spotify daily quota exhausted (HTTP 429).{hint} Restart the app tomorrow."
+        ) from e
 
 
 def spotify_timeout_handler(func, *args, **kwargs):
-    """Backward-compatible-ish wrapper for spotipy calls.
-
-    Accepts the same call sites as the old utils.timeout_handler:
-      - max_time_outs
-      - _logger
-    """
-
-    max_time_outs = int(kwargs.pop("max_time_outs", 10))
+    # Strip legacy call-site kwargs that no longer apply.
+    kwargs.pop("max_time_outs", None)
     logger = kwargs.pop("_logger", None) or kwargs.pop("__logger", None)
-    return spotify_call_with_backoff(
-        func,
-        *args,
-        logger=logger,
-        max_retries=max_time_outs,
-        paced_interval_s=0.4,
-        **kwargs,
-    )
+    return spotify_call_with_backoff(func, *args, logger=logger, **kwargs)
 
 
 def url_unshortner(object_url: str) -> str:
@@ -168,7 +72,8 @@ def general_handler(url: str, method) -> list:
     """
     uri = url2uri(url, raw=True)
     try:
-        results = spotify_timeout_handler(method, uri)['tracks']
+        _response = spotify_timeout_handler(method, uri)
+        results = _response['tracks'] if 'tracks' in _response else _response
     except RuntimeError as e:
         # Exhausted retries (likely heavy throttling)
         print(str(e))
@@ -203,8 +108,7 @@ def general_handler(url: str, method) -> list:
 
 
 def playlist_handler(url: str) -> list:
-    # Forwards the playlist method to the general_handle
-    return general_handler(url, spotify_api.playlist)
+    return general_handler(url, spotify_api.playlist_items)
 
 
 def album_handler(url: str) -> list:

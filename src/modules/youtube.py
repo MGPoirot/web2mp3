@@ -2,7 +2,6 @@ from initialize import cookie_file, deno_bin, ytdlp_remote_components
 import logging
 import os
 import yt_dlp
-import pytube
 import json
 import random
 import time
@@ -30,7 +29,17 @@ playlist_identifier = '/playlist?'
 # substring to recognize an album object
 album_identifier = ' '  # YouTube does not have album object types
 
-playlist_handler = pytube.Playlist
+def playlist_handler(url: str) -> list:
+    playlist_id = url.split('list=')[-1].split('&')[0]
+    try:
+        playlist = YTMusic().get_playlist(playlist_id, limit=None)
+    except Exception:
+        return []
+    return [
+        f'https://www.youtube.com/watch?v={t["videoId"]}'
+        for t in playlist.get('tracks', [])
+        if t.get('videoId')
+    ]
 
 
 @lru_cache(maxsize=32)

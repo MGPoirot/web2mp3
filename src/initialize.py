@@ -1,7 +1,7 @@
 from urllib.error import HTTPError
 
 import dotenv
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 import os
 import shutil
 import spotipy
@@ -181,10 +181,15 @@ home_dir = Path(__file__).parents[1]
 
 # Check if Web2MP3 has been set up.
 ENV_PATH = Path(home_dir, '.config', '.env')
+
 if not dotenv.find_dotenv(ENV_PATH):
     print("No environment file found. Initiating setup wizard.")
     run_setup_wizard()
-dotenv.load_dotenv(ENV_PATH)
+
+# Load .env into os.environ before constructing SpotifyClientCredentials.
+# override=False means real shell env vars win over the .env file.
+# Use override=True if you explicitly want the .env file to win.
+dotenv.load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 # Check if setup file is complete, if not, resume setup
 env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', 'SPOTIPY_CLIENT_SECRET', 'LOCATION'
@@ -267,14 +272,30 @@ ytdlp_remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github"
 # We set a finite request timeout and disable Spotipy's own retry/backoff so that
 # our explicit Retry-After-aware backoff logic (utils.call_with_backoff) is what
 # governs waiting/retrying.
+
+# spotify_api = spotipy.Spotify(
+#     client_credentials_manager=SpotifyClientCredentials(
+#         client_id=os.environ.get("SPOTIPY_CLIENT_ID"),
+#         client_secret=os.environ.get("SPOTIPY_CLIENT_SECRET"),
+#     ),
+#     requests_timeout=float(os.environ.get("SPOTIFY_REQUEST_TIMEOUT", "15")),
+#     retries=0,
+#     status_retries=0,
+#     backoff_factor=0,
+# )
+
 spotify_api = spotipy.Spotify(
-    client_credentials_manager=SpotifyClientCredentials(),
+    auth_manager=SpotifyOAuth(
+        scope="playlist-read-private playlist-read-collaborative",
+        redirect_uri=os.environ.get("SPOTIPY_REDIRECT_URI", "https://maartenpoirot.com/contact"),
+        cache_path=str(ENV_PATH.parent / ".spotify_cache"),
+        open_browser=False,
+    ),
     requests_timeout=float(os.environ.get("SPOTIFY_REQUEST_TIMEOUT", "15")),
     retries=0,
     status_retries=0,
     backoff_factor=0,
 )
-
 
 def disp_daemons():
     daemons = glob(daemon_dir.format('*'))
