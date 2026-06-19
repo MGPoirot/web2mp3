@@ -25,4 +25,6 @@ src/index
 
 # Session / auth artifacts
 *cookies.txt
+.spotify_cache
+.claude/
 
