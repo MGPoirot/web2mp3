@@ -1,0 +1,19 @@
+services:
+  web2mp3:
+    build:
+      context: .
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: web2mp3:local
+    init: true
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ${HOST_MUSIC_DIR}:/music
+      - ./.config:/app/.config
+      - ./.logs:/app/.logs
+      - ./.daemons:/app/.daemons
+      - ./src/index:/app/src/index

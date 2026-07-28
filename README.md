@@ -144,6 +144,65 @@ https://www.youtube.com/watch?v=N4bFqW_eu2I
 ```
 *Displayed Spotify API credentials have since been deleted.*
 
+## Running with Docker
+
+Web2mp3 can also run as a Docker container via `docker-compose`, keeping the
+Python environment self-contained and confining filesystem access to a
+handful of explicit mounts (music library, config/auth, logs, daemon locks,
+download index) instead of the whole host.
+
+```
+cp .env.example .env                   # set HOST_MUSIC_DIR to your real music path
+cp .config/.env.example .config/.env    # fill in Spotify creds and LOCATION
+docker compose up -d --build
+```
+
+The container stays running as a background service — this matters because
+downloads happen in detached DAEMON processes that must keep running after a
+given command returns, and Docker tears down a container's whole process
+tree once its main command exits. Actual commands are run against the
+already-running container with `docker compose exec`:
+
+```
+# first time only: completes the setup wizard and Spotify OAuth login
+docker compose exec -it web2mp3 python src/main.py
+
+# subsequent, non-interactive downloads
+docker compose exec web2mp3 python src/main.py --headless <url>
+```
+
+To enable age-restricted downloads, drop a `*_cookies.txt` file (see
+"Downloading Age restricted content" below) into `./.config/` on the host —
+it's bind-mounted into the container and auto-detected there.
+
+If files written to your music library end up with unexpected ownership,
+rebuild with `UID`/`GID` build args matching whichever user/group owns that
+directory on the host (set in `.env`, see `.env.example`).
+
+**Migrating an existing (non-Docker) install:** point `HOST_MUSIC_DIR` at
+your existing music library and keep using your existing `.config/`,
+`.logs/`, `.daemons/`, and `src/index/` directories as-is — they bind-mount
+straight into the container at the same relative paths the app already
+uses. If those directories were previously created by a different
+user/UID (e.g. you ran web2mp3 as root before Dockerizing it), the
+container's non-root user won't be able to write to the existing files in
+them; fix this once with:
+```
+sudo chown -R <UID>:<GID> .config .logs .daemons src/index
+```
+using the same `UID`/`GID` values as in your `.env`. In `.config/.env`,
+make sure `MUSIC_DIR` is set to `/music` (the fixed path the container
+mounts your library to) rather than whatever host path it pointed to
+before, and clear/remove any `DENO_BIN` line so it's auto-detected from
+`PATH` inside the container.
+
+**Troubleshooting DNS:** `docker-compose.yml` sets explicit `dns:` servers
+(`1.1.1.1`, `8.8.8.8`) because Docker's embedded resolver can fail to pick
+up a working upstream nameserver from some hosts, which otherwise shows up
+as `Failed to resolve '...' (Temporary failure in name resolution)`. If
+your network blocks public DNS or you'd rather use your own resolver,
+change or remove those entries.
+
 ## Directory structuring
 
 Directory structure follows the recommendation by Plex Media Server:<sup>[1](https://support.plex.tv/articles/205568377-adding-local-artist-and-music-videos/)</sup>

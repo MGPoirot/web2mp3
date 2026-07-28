@@ -1,0 +1,12 @@
+.git
+.cache
+.config/
+Music/
+.logs/
+.daemons/
+src/index/
+local/
+__pycache__/
+*.pyc
+.claude/
+.env
