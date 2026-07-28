@@ -14,5 +14,6 @@ services:
       - ${HOST_MUSIC_DIR}:/music
       - ./.config:/app/.config
       - ./.logs:/app/.logs
-      - ./.daemons:/app/.daemons
       - ./src/index:/app/src/index
+    tmpfs:
+      - /app/.daemons

@@ -148,8 +148,10 @@ https://www.youtube.com/watch?v=N4bFqW_eu2I
 
 Web2mp3 can also run as a Docker container via `docker-compose`, keeping the
 Python environment self-contained and confining filesystem access to a
-handful of explicit mounts (music library, config/auth, logs, daemon locks,
-download index) instead of the whole host. A pre-built image is published to
+handful of explicit mounts (music library, config/auth, logs, download
+index) instead of the whole host — plus an in-memory `tmpfs` mount for
+daemon coordination locks, which is intentionally not persisted (see below).
+A pre-built image is published to
 `ghcr.io/mgpoirot/web2mp3` on every tagged release, so `docker-compose.yml`
 and a `.env` file are all you need — no local build or source checkout
 required (`build: .` is also present in the compose file for local
@@ -162,6 +164,15 @@ cp .config/.env.example .config/.env    # fill in Spotify creds and LOCATION
 docker compose up -d
 ```
 
+Fill in every value in `.config/.env` before first run (`MUSIC_DIR`,
+`SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`, `LOCATION`) and web2mp3's
+interactive setup wizard becomes a pure fallback — it only triggers if one
+of those four is still missing. It can't fully replace the Spotify OAuth
+login itself, though: that first authorization has to happen in a browser,
+so it's an unavoidable one-time interactive step regardless of how complete
+`.config/.env` is (see below for running that step via
+`docker compose exec -it`).
+
 The container process runs as a non-root user, remapped at startup to the
 `PUID`/`PGID` you set in `.env` (default `1000`/`1000`) — no rebuild needed
 to change them, they just need to match whatever user/group owns
@@ -172,11 +183,15 @@ files come out writable/readable as expected. Check with `id -u`/`id -g`, or
 The container stays running as a background service — this matters because
 downloads happen in detached DAEMON processes that must keep running after a
 given command returns, and Docker tears down a container's whole process
-tree once its main command exits. Actual commands are run against the
-already-running container with `docker compose exec`, through the `as-app`
-wrapper (plain `docker compose exec` defaults to root, since the image has
-no static user baked in — `as-app` drops to the same `PUID`/`PGID`-mapped
-user as the main process before running anything):
+tree once its main command exits. `/app/.daemons` (the PID lock files that
+track which DAEMON slot is doing what) is mounted as `tmpfs` rather than
+bind-mounted to disk: it's purely in-container coordination state, wiped
+clean on every container start, so there's nothing stale left behind by a
+hard crash or `docker compose kill` to clean up. Actual commands are run
+against the already-running container with `docker compose exec`, through
+the `as-app` wrapper (plain `docker compose exec` defaults to root, since
+the image has no static user baked in — `as-app` drops to the same
+`PUID`/`PGID`-mapped user as the main process before running anything):
 
 ```
 # first time only: completes the setup wizard and Spotify OAuth login
@@ -192,14 +207,15 @@ it's bind-mounted into the container and auto-detected there.
 
 **Migrating an existing (non-Docker) install:** point `HOST_MUSIC_DIR` at
 your existing music library and keep using your existing `.config/`,
-`.logs/`, `.daemons/`, and `src/index/` directories as-is — they bind-mount
-straight into the container at the same relative paths the app already
-uses. If those directories were previously created by a different
+`.logs/`, and `src/index/` directories as-is (leave any existing
+`.daemons/` behind — it's not used by the container, see above) — they
+bind-mount straight into the container at the same relative paths the app
+already uses. If those directories were previously created by a different
 user/UID (e.g. you ran web2mp3 as root before Dockerizing it), the
 container's non-root user won't be able to write to the existing files in
 them; fix this once with:
 ```
-sudo chown -R <PUID>:<PGID> .config .logs .daemons src/index
+sudo chown -R <PUID>:<PGID> .config .logs src/index
 ```
 using the same `PUID`/`PGID` values as in your `.env`. In `.config/.env`,
 make sure `MUSIC_DIR` is set to `/music` (the fixed path the container
@@ -214,16 +230,17 @@ as `Failed to resolve '...' (Temporary failure in name resolution)`. If
 your network blocks public DNS or you'd rather use your own resolver,
 change or remove those entries.
 
-### Deploying via OpenMediaVault's Compose plugin
+### Deploying from a GUI stack manager (Portainer, OpenMediaVault, etc.)
 
-If you're running this on an OpenMediaVault NAS with the `Compose` plugin
-(Services → Compose), you don't need a source checkout at all — just paste
-a compose body and an env body into the GUI:
+The published image means the stack is fully self-contained — no source
+checkout, no local build. That makes it a good fit for any tool that just
+wants a compose body pasted in (Portainer's "Stacks", OpenMediaVault's
+`Compose` plugin, Unraid's Compose Manager, and so on):
 
-**Compose body** (note the absolute bind-mount paths — OMV stores the
-generated compose file under its own shared-folder location, so relative
-`./` paths won't resolve to anywhere useful; point them at wherever you want
-this state to actually live on your NAS):
+**Compose body** (note the absolute bind-mount paths — GUI stack managers
+typically store the compose file under their own internal location, so
+relative `./` paths won't resolve to anywhere useful; point them at
+wherever you want this state to actually live on disk):
 ```yaml
 services:
   web2mp3:
@@ -238,27 +255,29 @@ services:
       PGID: ${PGID:-1000}
     volumes:
       - ${HOST_MUSIC_DIR}:/music
-      - /path/to/web2mp3/.config:/app/.config
-      - /path/to/web2mp3/.logs:/app/.logs
-      - /path/to/web2mp3/.daemons:/app/.daemons
-      - /path/to/web2mp3/src/index:/app/src/index
+      - ${WEB2MP3_STATE_DIR}/.config:/app/.config
+      - ${WEB2MP3_STATE_DIR}/.logs:/app/.logs
+      - ${WEB2MP3_STATE_DIR}/src/index:/app/src/index
+    tmpfs:
+      - /app/.daemons
 ```
 
 **Env body:**
 ```
 HOST_MUSIC_DIR=/path/to/your/Music
+WEB2MP3_STATE_DIR=/path/to/wherever/web2mp3/state/should/live
 PUID=1000
 PGID=1000
 ```
 
-After creating the stack, pull and start it from the OMV UI (or `Up`
-button), then run the first-time setup/OAuth wizard and subsequent
-downloads the same way as above, from a shell:
+After creating the stack, pull and start it from the GUI, then run the
+first-time setup/OAuth wizard and subsequent downloads the same way as
+above, from a shell:
 ```
 docker compose -p web2mp3 exec -it web2mp3 as-app python src/main.py
 ```
-(`-p web2mp3` — or whatever project name OMV assigned the stack — targets
-the right compose project when running commands outside the OMV UI.)
+(`-p web2mp3` — or whatever project name the GUI assigned the stack —
+targets the right compose project when running commands outside the GUI.)
 
 ## Directory structuring
 

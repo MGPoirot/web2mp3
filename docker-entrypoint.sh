@@ -11,9 +11,12 @@ usermod -o -u "$PUID" appuser
 
 mkdir -p .config .logs .daemons src/index
 
-# A hard container stop/OOM leaves stale daemon lock files behind (they're
-# only cleaned up via atexit). A freshly-started container has no real
-# daemons running yet, so it's always safe to clear them here.
-rm -f .daemons/*.tmp 2>/dev/null || true
+# .daemons is a tmpfs mount (see docker-compose.yml) — it's purely
+# in-container coordination state (PID lock files), so it's mounted fresh
+# and empty on every container start, owned by root. Hand it to the
+# unprivileged user so it can actually create lock files there. This also
+# means the old stale-lock-cleanup-on-crash concern no longer applies: a
+# fresh tmpfs has nothing stale to clean up.
+chown "$PUID:$PGID" .daemons
 
 exec setpriv --reuid "$PUID" --regid "$PGID" --clear-groups "$@"
