@@ -149,35 +149,46 @@ https://www.youtube.com/watch?v=N4bFqW_eu2I
 Web2mp3 can also run as a Docker container via `docker-compose`, keeping the
 Python environment self-contained and confining filesystem access to a
 handful of explicit mounts (music library, config/auth, logs, daemon locks,
-download index) instead of the whole host.
+download index) instead of the whole host. A pre-built image is published to
+`ghcr.io/mgpoirot/web2mp3` on every tagged release, so `docker-compose.yml`
+and a `.env` file are all you need — no local build or source checkout
+required (`build: .` is also present in the compose file for local
+development; `docker compose up` prefers a locally-built image if you've run
+`docker compose build`, otherwise it pulls from GHCR).
 
 ```
-cp .env.example .env                   # set HOST_MUSIC_DIR to your real music path
+cp .env.example .env    # set HOST_MUSIC_DIR and PUID/PGID
 cp .config/.env.example .config/.env    # fill in Spotify creds and LOCATION
-docker compose up -d --build
+docker compose up -d
 ```
+
+The container process runs as a non-root user, remapped at startup to the
+`PUID`/`PGID` you set in `.env` (default `1000`/`1000`) — no rebuild needed
+to change them, they just need to match whatever user/group owns
+`HOST_MUSIC_DIR` and the config/log/index directories below, so downloaded
+files come out writable/readable as expected. Check with `id -u`/`id -g`, or
+`stat -c '%u %g' /path/to/your/Music`.
 
 The container stays running as a background service — this matters because
 downloads happen in detached DAEMON processes that must keep running after a
 given command returns, and Docker tears down a container's whole process
 tree once its main command exits. Actual commands are run against the
-already-running container with `docker compose exec`:
+already-running container with `docker compose exec`, through the `as-app`
+wrapper (plain `docker compose exec` defaults to root, since the image has
+no static user baked in — `as-app` drops to the same `PUID`/`PGID`-mapped
+user as the main process before running anything):
 
 ```
 # first time only: completes the setup wizard and Spotify OAuth login
-docker compose exec -it web2mp3 python src/main.py
+docker compose exec -it web2mp3 as-app python src/main.py
 
 # subsequent, non-interactive downloads
-docker compose exec web2mp3 python src/main.py --headless <url>
+docker compose exec web2mp3 as-app python src/main.py --headless <url>
 ```
 
 To enable age-restricted downloads, drop a `*_cookies.txt` file (see
 "Downloading Age restricted content" below) into `./.config/` on the host —
 it's bind-mounted into the container and auto-detected there.
-
-If files written to your music library end up with unexpected ownership,
-rebuild with `UID`/`GID` build args matching whichever user/group owns that
-directory on the host (set in `.env`, see `.env.example`).
 
 **Migrating an existing (non-Docker) install:** point `HOST_MUSIC_DIR` at
 your existing music library and keep using your existing `.config/`,
@@ -188,9 +199,9 @@ user/UID (e.g. you ran web2mp3 as root before Dockerizing it), the
 container's non-root user won't be able to write to the existing files in
 them; fix this once with:
 ```
-sudo chown -R <UID>:<GID> .config .logs .daemons src/index
+sudo chown -R <PUID>:<PGID> .config .logs .daemons src/index
 ```
-using the same `UID`/`GID` values as in your `.env`. In `.config/.env`,
+using the same `PUID`/`PGID` values as in your `.env`. In `.config/.env`,
 make sure `MUSIC_DIR` is set to `/music` (the fixed path the container
 mounts your library to) rather than whatever host path it pointed to
 before, and clear/remove any `DENO_BIN` line so it's auto-detected from
@@ -202,6 +213,52 @@ up a working upstream nameserver from some hosts, which otherwise shows up
 as `Failed to resolve '...' (Temporary failure in name resolution)`. If
 your network blocks public DNS or you'd rather use your own resolver,
 change or remove those entries.
+
+### Deploying via OpenMediaVault's Compose plugin
+
+If you're running this on an OpenMediaVault NAS with the `Compose` plugin
+(Services → Compose), you don't need a source checkout at all — just paste
+a compose body and an env body into the GUI:
+
+**Compose body** (note the absolute bind-mount paths — OMV stores the
+generated compose file under its own shared-folder location, so relative
+`./` paths won't resolve to anywhere useful; point them at wherever you want
+this state to actually live on your NAS):
+```yaml
+services:
+  web2mp3:
+    image: ghcr.io/mgpoirot/web2mp3:latest
+    init: true
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    volumes:
+      - ${HOST_MUSIC_DIR}:/music
+      - /path/to/web2mp3/.config:/app/.config
+      - /path/to/web2mp3/.logs:/app/.logs
+      - /path/to/web2mp3/.daemons:/app/.daemons
+      - /path/to/web2mp3/src/index:/app/src/index
+```
+
+**Env body:**
+```
+HOST_MUSIC_DIR=/path/to/your/Music
+PUID=1000
+PGID=1000
+```
+
+After creating the stack, pull and start it from the OMV UI (or `Up`
+button), then run the first-time setup/OAuth wizard and subsequent
+downloads the same way as above, from a shell:
+```
+docker compose -p web2mp3 exec -it web2mp3 as-app python src/main.py
+```
+(`-p web2mp3` — or whatever project name OMV assigned the stack — targets
+the right compose project when running commands outside the OMV UI.)
 
 ## Directory structuring
 

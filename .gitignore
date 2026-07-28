@@ -22,6 +22,8 @@ src/index
 
 # Environment / secrets
 .env
+.env.*
+!.env.example
 
 # Session / auth artifacts
 *cookies.txt

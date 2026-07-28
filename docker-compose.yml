@@ -1,16 +1,15 @@
 services:
   web2mp3:
-    build:
-      context: .
-      args:
-        UID: ${UID:-1000}
-        GID: ${GID:-1000}
-    image: web2mp3:local
+    build: .
+    image: ghcr.io/mgpoirot/web2mp3:latest
     init: true
     restart: unless-stopped
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
     volumes:
       - ${HOST_MUSIC_DIR}:/music
       - ./.config:/app/.config

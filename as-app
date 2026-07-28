@@ -1,0 +1,7 @@
+#!/bin/sh
+# `docker compose exec` bypasses ENTRYPOINT and defaults to root, since the
+# image has no static USER (it's remapped to PUID/PGID at container start
+# instead). Wrap ad-hoc exec'd commands with this so they run as the same
+# unprivileged, correctly-owned user as the main process, e.g.:
+#   docker compose exec web2mp3 as-app python src/main.py --headless <url>
+exec setpriv --reuid "${PUID:-1000}" --regid "${PGID:-1000}" --clear-groups "$@"
