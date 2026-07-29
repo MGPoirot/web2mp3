@@ -1,66 +1,78 @@
 from initialize import index_path, Path
 from utils import input_is
-from utils import json_out, json_in
 from typing import List
 import json
+import sqlite3
+import time
+
+DB_PATH = index_path / "index.sqlite3"
+
+_conn: sqlite3.Connection | None = None
 
 
-def uri2path(uri: str | Path) -> Path:
+def _get_conn() -> sqlite3.Connection:
     """
-    Converts a URI string to a Path object pointing to the storage location.
-
-    This function takes a URI string or a Path object and converts it into
-    a Path object that represents the full path to the file in the storage
-    location. For example, if the URI is 'platform.KEivybw89gyiv', the
-    function returns a Path object representing
-    'INDEX_PATH/platform.KEivybw89gyiv'.
-
-    :param uri:     A URI string or a Path object to be converted.
-    :return:        A Path object pointing to the full storage path.
+    Lazily opens (and initializes the schema of) the module-level SQLite
+    connection. One connection per process is the correct usage pattern for
+    concurrent multi-process SQLite access under WAL mode, which is what
+    lets the 4 DAEMON processes read/write the index concurrently.
     """
-    path = uri if isinstance(uri, Path) else index_path / uri
-    return path
+    global _conn
+    if _conn is None:
+        conn = sqlite3.connect(str(DB_PATH), timeout=5, isolation_level=None)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS entries (
+                uri        TEXT PRIMARY KEY,
+                status     TEXT NOT NULL CHECK (status IN ('pending', 'done')),
+                payload    TEXT,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status)")
+        _conn = conn
+    return _conn
 
 
 def has_uri(uri: str | Path) -> bool:
     """
-    Checks if the file corresponding to the URI exists in the index.
+    Checks if the URI has an entry in the index.
 
     :param uri:     A URI string or Path object representing the index item.
-    :return:        True if the file exists, False otherwise.
+    :return:        True if an entry exists, False otherwise.
     """
-    return uri2path(uri).is_file()
+    row = _get_conn().execute(
+        "SELECT 1 FROM entries WHERE uri = ?", (str(uri),)
+    ).fetchone()
+    return row is not None
 
 
 def read(uri: str | Path) -> dict | None:
     """
-    Reads and returns the content of a JSON file from the index.
+    Reads and returns the pending payload for a URI from the index.
 
     :param uri:     A URI string or Path object representing the index item.
-    :return:        A dictionary with the JSON content if the file is not empty,
-                    or `None` if the file is empty.
+    :return:        A dictionary with the JSON content if the entry is
+                    pending, or `None` if the entry is done or absent.
     """
-    path = uri2path(uri)
-    return None if is_empty(path) else json_in(path)
-
-
-def is_empty(path: Path) -> bool:
-    """
-    Checks if a file is empty.
-
-    :param path:    A Path object representing the file to check.
-    :return:        `True` if the file is empty, `False` otherwise.
-    """
-    return path.stat().st_size == 0
+    row = _get_conn().execute(
+        "SELECT payload FROM entries WHERE uri = ? AND status = 'pending'", (str(uri),)
+    ).fetchone()
+    return None if row is None else json.loads(row[0])
 
 
 def to_do() -> List[str]:
     """
-    Retrieves a list of non-empty URIs from the index.
+    Retrieves a list of pending URIs from the index.
 
-    :return:    A list of URI strings corresponding to non-empty files in the index.
+    :return:    A list of URI strings with a pending entry.
     """
-    return [f.name for f in index_path.rglob("*") if not is_empty(f)]
+    rows = _get_conn().execute("SELECT uri FROM entries WHERE status = 'pending'").fetchall()
+    return [r[0] for r in rows]
 
 
 def write(
@@ -79,11 +91,24 @@ def write(
 
     :return:            None.
     """
-    path = uri2path(uri)
-    if not overwrite and has_uri(path):
+    if not overwrite and has_uri(uri):
         return
     payload = {'tags': tags, 'settings': settings}
-    json_out(payload, path) if any(payload.values()) else open(path, 'w').close()
+    conn = _get_conn()
+    if any(payload.values()):
+        conn.execute(
+            "INSERT INTO entries (uri, status, payload, updated_at) VALUES (?, 'pending', ?, ?) "
+            "ON CONFLICT(uri) DO UPDATE SET status='pending', payload=excluded.payload, "
+            "updated_at=excluded.updated_at",
+            (str(uri), json.dumps(payload), time.time()),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO entries (uri, status, payload, updated_at) VALUES (?, 'done', NULL, ?) "
+            "ON CONFLICT(uri) DO UPDATE SET status='done', payload=NULL, "
+            "updated_at=excluded.updated_at",
+            (str(uri), time.time()),
+        )
 
 
 def debug() -> None:
@@ -94,82 +119,53 @@ def debug() -> None:
     - View statistics about the index (number of records, processed/unprocessed records).
     - View detailed information about individual items in the database.
     - Delete or clear items from the database.
-
-    It includes the following helper functions:
-    - `_pretty_print(uri)`: Pretty-prints the JSON content of a given URI.
-    - `_pop_uri_from_index(uri)`: Deletes an index item of to the URI.
-
-    :return: None.
     """
 
-    def _pretty_print(uri: str | Path) -> None:
-        """
-        Pretty-prints the content of the and index item for a specified URI.
+    def _pretty_print(uri: str) -> None:
+        print(json.dumps(read(uri), indent=4, sort_keys=True))
 
-        :param uri: A URI string or Path object representing the index item.
-        :return: None.
-        """
-        print(json.dumps(read(uri2path(uri)), indent=4, sort_keys=True))
-
-    def _pop_uri_from_index(uri: str | Path) -> None:
-        """
-        Deletes the index item and prints a confirmation message.
-
-        :param uri: A URI string or Path object of the index item to be deleted.
-        :return: None.
-        """
-        uri2path(uri).unlink()
+    def _pop_uri_from_index(uri: str) -> None:
+        _get_conn().execute("DELETE FROM entries WHERE uri = ?", (uri,))
         print(f'Deleted index item "{uri}"')
 
-    # Get statistics of the index
-    n_records = len(list(index_path.glob('*')))  # Number of URIs in the index
-    uris_to_do = to_do()  # List of unprocessed URIs
-    n_to_do = len(uris_to_do)  # Number of unprocessed items
-    n_empty_records = n_records - n_to_do  # Number of processed (empty) URIs
+    conn = _get_conn()
+    n_records = conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+    uris_to_do = to_do()
+    n_to_do = len(uris_to_do)
+    n_empty_records = n_records - n_to_do
 
-    # Structure the meta information to print
     info = [
         ('number of processed records', n_empty_records),
         ('number of unprocessed records', n_to_do),
-        ('location', index_path),
+        ('location', DB_PATH),
     ]
 
-    # Print header and the index meta information
     print('INDEX INFORMATION:',
           *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info]
           )
 
-    # Early return if there are no URIs non-empty URIs to inspect
     if not n_to_do:
         return
 
-    # Allow the user to choose between viewing a list of items or one by one
     look_closer = input('>>> Do you want to see a list of items,'
                         ' or check per item? List / Item / [No]  ')
 
-    # Early return if the user did not choose to inspect
     if not input_is('List', look_closer) and not input_is('Item', look_closer):
         return
 
-    # Process the user request to inspect URIs
     for i, uri in enumerate(uris_to_do):
-        path = uri2path(uri)
+        print(f'{str(i + 1).rjust(3)}/{n_to_do}:', uri)
+        _pretty_print(uri)
 
-        # Display item details
-        print(f'{str(i + 1).rjust(3)}/{n_to_do}:', path.name)
-        _pretty_print(path)
-
-        # Let the user decide whether to delete or empty an item
         if input_is('Item', look_closer):
             do_pop = input(
                 '>>> Do you want to permanently delete or clear this '
                 'item from the index? Delete / Clear / [No]  ')
             if input_is('Delete', do_pop):
-                _pop_uri_from_index(path)  # Delete the item
+                _pop_uri_from_index(uri)
                 msg = 'deleted'
             elif input_is('Clear', do_pop):
-                write(
-                    path)  # Clear the item (write an empty record)
+                write(uri)
                 msg = 'cleared'
             else:
                 msg = 'untouched'

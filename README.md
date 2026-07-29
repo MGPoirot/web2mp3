@@ -120,8 +120,11 @@ be added during the first run.
 **4. Concise managing of downloads**
 
 To speed up the downloading process, Web2mp3 stores a download history in the
-index (`/src/index`). To avoid these checks, the `--do_overwrite` flag can be 
-passed.
+index (`/src/index/index.sqlite3`, a single SQLite database — earlier
+versions stored one file per tracked URI; if you're upgrading from one of
+those, run `python src/migrate_index_to_sqlite.py` once to convert your
+existing history over before running anything else). To avoid these checks,
+the `--do_overwrite` flag can be passed.
 As a final check before downloading , Web2mp3 checks if the song to be 
 downloaded does not already exist in the music directory. It does this by
 checking if the artist already has a song downloaded containing this song name.
