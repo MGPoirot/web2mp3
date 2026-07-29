@@ -3,6 +3,7 @@ from utils import input_is
 from typing import List
 import json
 import sqlite3
+import sys
 import time
 
 DB_PATH = index_path / "index.sqlite3"
@@ -111,6 +112,32 @@ def write(
         )
 
 
+def summary() -> int:
+    """
+    Prints index statistics (processed/unprocessed record counts, location).
+    Non-interactive — used standalone by the `inspect` CLI subcommand, and
+    as the first step of the interactive `debug()` below.
+
+    :return: The number of pending (unprocessed) URIs.
+    """
+    conn = _get_conn()
+    n_records = conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+    uris_to_do = to_do()
+    n_to_do = len(uris_to_do)
+    n_empty_records = n_records - n_to_do
+
+    info = [
+        ('number of processed records', n_empty_records),
+        ('number of unprocessed records', n_to_do),
+        ('location', DB_PATH),
+    ]
+
+    print('INDEX INFORMATION:',
+          *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info]
+          )
+    return n_to_do
+
+
 def debug() -> None:
     """
     Provides an interactive interface for debugging and managing the index.
@@ -128,21 +155,8 @@ def debug() -> None:
         _get_conn().execute("DELETE FROM entries WHERE uri = ?", (uri,))
         print(f'Deleted index item "{uri}"')
 
-    conn = _get_conn()
-    n_records = conn.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
+    n_to_do = summary()
     uris_to_do = to_do()
-    n_to_do = len(uris_to_do)
-    n_empty_records = n_records - n_to_do
-
-    info = [
-        ('number of processed records', n_empty_records),
-        ('number of unprocessed records', n_to_do),
-        ('location', DB_PATH),
-    ]
-
-    print('INDEX INFORMATION:',
-          *['\n- {}{}'.format(k.ljust(30), str(v).rjust(6)) for k, v in info]
-          )
 
     if not n_to_do:
         return
@@ -173,4 +187,4 @@ def debug() -> None:
 
 
 if __name__ == '__main__':
-    debug()
+    summary() if '--summary' in sys.argv else debug()

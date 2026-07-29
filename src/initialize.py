@@ -1,12 +1,10 @@
 from urllib.error import HTTPError
 
-import dotenv
-from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
+from spotipy.oauth2 import SpotifyOAuth
 import os
 import shutil
 import spotipy
 import eyed3
-import re
 import pathlib
 import time
 from glob import glob as dumb_glob
@@ -30,38 +28,23 @@ def glob(pathname, *args, **kwargs) -> List[Path]:
     return [Path(i) for i in dumb_glob(str(pathname), *args, **kwargs)]
 
 
-def set_in_dot_env(key: str, value: str, overwrite=True) -> None:
-    """
-    Add a key value pair to the .env file.
-    Avoids duplications of keys by overwriting.
-    """
-    # Create an environment file if none exists
-    if not ENV_PATH.is_file():
-        ENV_PATH.parent.mkdir(exist_ok=True)
-        with open(ENV_PATH, 'w') as f:
-            f.write('# ENVIRONMENT FILE CREATED AUTOMATICALLY BY WEB2MP3\n')
+def _fallback(key: str, default: str) -> str:
+    """Read an env var, falling back to a printed-and-used default if unset."""
+    val = os.environ.get(key)
+    if val:
+        return val
+    print(f'[web2mp3] "{key}" not set, falling back to default: {default!r}')
+    return default
 
-    # Read the data in the environment file
-    with open(ENV_PATH, 'r') as f:
-        data = f.read()
 
-    # Ensure the key is in capitals
-    key = key.upper()
-
-    # Check if there are previous enties for this key
-    old_entries = re.findall(f"{key}=.*?\n", data)
-
-    if not any(old_entries) or not overwrite:
-        # Append to the environment file
-        with open(ENV_PATH, 'a') as f:
-            f.write(f'{key}={value}\n')
-    else:
-        # Replace the old value of the last entry
-        old_entry = old_entries[-1]
-        data.replace(old_entry, f'{key}={value}\n')
-        with open(ENV_PATH, 'w') as file:
-            file.write(data)
-    return
+def _require(key: str, hint: str) -> str:
+    """Read a required env var, failing fast with actionable guidance if unset."""
+    val = os.environ.get(key)
+    if not val:
+        print(f'[web2mp3] ERROR: required environment variable "{key}" is not set.')
+        print(f'          {hint}')
+        raise SystemExit(1)
+    return val
 
 
 def _auto_deno_bin() -> str:
@@ -81,16 +64,6 @@ def _auto_deno_bin() -> str:
         return p
 
     return ""
-
-
-def sfy_validator(ans: str) -> bool:
-    # Validates user input for Spotify client secret
-    return all(c.isdigit() or c.islower() for c in ans) and len(ans) == 32
-
-
-def pth_validator(ans: str) -> bool:
-    # Validates user input for music download directory
-    return Path(ans).parent.is_dir()
 
 
 def location_validator(market: str) -> bool:
@@ -121,89 +94,15 @@ def location_validator(market: str) -> bool:
     return market in l
 
 
-def run_setup_wizard():
-    """
-    Runs the setup wizard for Web2MP3 and stores user input in a ".env" file.
-
-    Prompts user for input regarding:
-     - the Web2MP3 home directory
-     - music download directory
-     - Spotify username (optional)
-     - Spotify client ID
-     - Spotify client
-    Validates user input and writes it to a ".env" file.
-
-    :return: None
-    """
-    music_dir_default = home_dir / "Music"
-    location_default = "US"
-
-    qs = {
-        'MUSIC_DIR': ('Music download directory', pth_validator, music_dir_default),
-        '# Spotify username': ('Spotify username (optional)', lambda x: 1, 'NA'),
-        'SPOTIPY_CLIENT_ID': ('Spotify client ID', sfy_validator, None),
-        'SPOTIPY_CLIENT_SECRET': ('Spotify client secret', sfy_validator, None),
-        'LOCATION': ('Location', location_validator, location_default)
-    }
-    print("                         , - ~ ~ ~ - ,                           \n"
-          "                     , '   WEB 2 MP3   ' ,                       \n"
-          "                   ,                       ,                     \n"
-          "                  ,         |~~~~~~~|       ,                    \n"
-          "                 ,          |~~~~~~~|        ,                   \n"
-          "                 ,          |       |        ,                   \n"
-          "                 ,      /~~\|   /~~\|        ,                   \n"
-          "                  ,     \__/    \__/        ,                    \n"
-          "                   ,                       ,                     \n"
-          "                     ,Music Download CLI, '                      \n"
-          "                       ' - , _ _ _ ,  '                          \n")
-    print('Welcome to Web2MP3. No setup file (".env") was found. The setup  \n'
-          'wizard will as a few questions to set up Web2MP3. Answers are    \n'
-          'secret and stored in the ".env" file. If available, a proposed   \n'
-          'default is suggested in brackets:                                \n')
-    for i, (k, (question, validator, default)) in enumerate(qs.items(), 1):
-        while True:
-            q_fmt = f'What is your {question}?'
-            default = default if not os.environ.get(k) else os.environ.get(k)
-            d_fmt = f'[{default}]' if default else ''
-            answer = input(f'  {i}. {q_fmt.ljust(24)}\n    {d_fmt}\n')
-            answer = default if not answer and default else answer
-            if validator(answer):
-                set_in_dot_env(key=k, value=answer)
-                break
-            else:
-                print(f'     "{answer}" is not a valid {question}')
-    print('Secrets successfully stored.\n'
-          'Web2MP3 set up successful.')
-
-
 # Where are we?
 home_dir = Path(__file__).parents[1]
 
-# Check if Web2MP3 has been set up.
-ENV_PATH = Path(home_dir, '.config', '.env')
+music_dir = Path(_fallback('MUSIC_DIR', '/music'))
+default_location = _fallback('LOCATION', 'US')
+if not location_validator(default_location):
+    print(f'[web2mp3] Warning: "{default_location}" is not a recognized Spotify '
+          f'market code; Spotify API calls using it may fail.')
 
-if not dotenv.find_dotenv(ENV_PATH):
-    print("No environment file found. Initiating setup wizard.")
-    run_setup_wizard()
-
-# Load .env into os.environ before constructing SpotifyClientCredentials.
-# override=False means real shell env vars win over the .env file.
-# Use override=True if you explicitly want the .env file to win.
-dotenv.load_dotenv(dotenv_path=ENV_PATH, override=True)
-
-# Check if setup file is complete, if not, resume setup
-env_keys = 'MUSIC_DIR', 'SPOTIPY_CLIENT_ID', 'SPOTIPY_CLIENT_SECRET', 'LOCATION'
-env_exists = [True if os.environ.get(v) else False for v in env_keys]
-if not all(env_exists):
-    print("Incomplete environment file found. Resuming setup.")
-    run_setup_wizard()
-dotenv.load_dotenv(ENV_PATH)
-
-# Define paths from config env
-music_dir = Path(os.environ.get('MUSIC_DIR'))
-default_location = os.environ.get('LOCATION')
-
-# future, but currently, nothing is broken so no need to fix anything.
 daemon_dir = home_dir / '.daemons' / 'daemon-{}.tmp'
 log_dir = home_dir / '.logs' / '{}.{}'
 index_path = home_dir / 'src' / 'index'
@@ -218,49 +117,42 @@ for log_regex in (log_dir.format('*', 'json'), log_dir.format('*', 'txt')):
         f.unlink()
 
 
+COOKIE_HELP_TEXT = (
+    'No cookie file found. Age-restricted YouTube downloads need one. To get one:\n'
+    '  1. Install the browser extension "Get cookies.txt LOCALLY"\n'
+    '  2. Go to youtube.com while logged in\n'
+    '  3. Open the extension and export your cookies\n'
+    '  4. Save the file into ./.config/ (any name ending in "_cookies.txt")\n'
+    'The exported file must contain a "__Secure-1PSID" cookie.'
+)
+
+
 def auto_cookie() -> Path | str:
     cookie_file = ''
     try:
         cookie_file = next(home_dir.glob('**/*cookies.txt'))
         print(f'A cookie file was found: "{cookie_file}"')
     except StopIteration:
-        # Warn the user of the limitations of not setting a COOKIE_FILE
-        print('Warning: No COOKIE_FILE was found. \n'
-              'Without COOKIE_FILE age restricted download will fail.')
+        print(COOKIE_HELP_TEXT)
     return cookie_file
 
-# Check if a COOKIE_FILE is set
+
+# Resolve COOKIE_FILE
 if not os.environ.get('COOKIE_FILE'):
     cookie_file = auto_cookie()
-    set_in_dot_env("COOKIE_FILE", cookie_file)
 else:
     cookie_file = os.environ.get('COOKIE_FILE')
     if not os.path.isfile(cookie_file):
         print(f'The cookie file specified does not exist: "{cookie_file}"')
         cookie_file = auto_cookie()
-        if len(str(cookie_file)) > 0:
-            set_in_dot_env("COOKIE_FILE", cookie_file)
 
+# Resolve DENO_BIN (optional but recommended for reliable yt-dlp EJS)
+deno_bin = _auto_deno_bin()
+if not deno_bin:
+    print(
+        "Warning: deno not found. YouTube signature solving may fail (yt-dlp EJS)."
+    )
 
-# Ensure DENO_BIN is set (optional but recommended for reliable yt-dlp EJS)
-if not os.environ.get("DENO_BIN"):
-    deno_bin = _auto_deno_bin()
-    if deno_bin:
-        set_in_dot_env("DENO_BIN", deno_bin)
-    else:
-        print(
-            "Warning: DENO_BIN not set and deno not found. "
-            "YouTube signature solving may fail (yt-dlp EJS)."
-        )
-dotenv.load_dotenv(ENV_PATH, override=True)
-
-# Ensure YTDLP_REMOTE_COMPONENTS is set
-if not os.environ.get("YTDLP_REMOTE_COMPONENTS"):
-    set_in_dot_env("YTDLP_REMOTE_COMPONENTS", "ejs:github")
-dotenv.load_dotenv(ENV_PATH, override=True)
-
-# Export as module-level variables for import by modules
-deno_bin = os.environ.get("DENO_BIN", "")
 ytdlp_remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github")
 
 
@@ -273,29 +165,42 @@ ytdlp_remote_components = os.environ.get("YTDLP_REMOTE_COMPONENTS", "ejs:github"
 # our explicit Retry-After-aware backoff logic (utils.call_with_backoff) is what
 # governs waiting/retrying.
 
-# spotify_api = spotipy.Spotify(
-#     client_credentials_manager=SpotifyClientCredentials(
-#         client_id=os.environ.get("SPOTIPY_CLIENT_ID"),
-#         client_secret=os.environ.get("SPOTIPY_CLIENT_SECRET"),
-#     ),
-#     requests_timeout=float(os.environ.get("SPOTIFY_REQUEST_TIMEOUT", "15")),
-#     retries=0,
-#     status_retries=0,
-#     backoff_factor=0,
-# )
+_spotify_client = None
 
-spotify_api = spotipy.Spotify(
-    auth_manager=SpotifyOAuth(
-        scope="playlist-read-private playlist-read-collaborative",
-        redirect_uri=os.environ.get("SPOTIPY_REDIRECT_URI", "https://maartenpoirot.com/contact"),
-        cache_path=str(ENV_PATH.parent / ".spotify_cache"),
-        open_browser=False,
-    ),
-    requests_timeout=float(os.environ.get("SPOTIFY_REQUEST_TIMEOUT", "15")),
-    retries=0,
-    status_retries=0,
-    backoff_factor=0,
-)
+
+def get_spotify_client() -> spotipy.Spotify:
+    """
+    Lazily constructs (and memoizes) the Spotify client. Deferred until
+    actually needed (rather than built at import time) so that commands
+    that don't talk to Spotify — e.g. the `cookie`/`inspect` CLI subcommands
+    — work even before SPOTIPY_CLIENT_ID/SECRET are configured.
+    """
+    global _spotify_client
+    if _spotify_client is None:
+        client_id = _require(
+            'SPOTIPY_CLIENT_ID',
+            'Get one from https://developer.spotify.com/dashboard and set it in .env',
+        )
+        client_secret = _require(
+            'SPOTIPY_CLIENT_SECRET',
+            'Get one from https://developer.spotify.com/dashboard and set it in .env',
+        )
+        _spotify_client = spotipy.Spotify(
+            auth_manager=SpotifyOAuth(
+                client_id=client_id,
+                client_secret=client_secret,
+                scope="playlist-read-private playlist-read-collaborative",
+                redirect_uri=os.environ.get("SPOTIPY_REDIRECT_URI", "https://maartenpoirot.com/contact"),
+                cache_path=str(home_dir / '.config' / '.spotify_cache'),
+                open_browser=False,
+            ),
+            requests_timeout=float(os.environ.get("SPOTIFY_REQUEST_TIMEOUT", "15")),
+            retries=0,
+            status_retries=0,
+            backoff_factor=0,
+        )
+    return _spotify_client
+
 
 def disp_daemons():
     daemons = glob(daemon_dir.format('*'))

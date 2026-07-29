@@ -1,0 +1,9 @@
+#!/bin/sh
+# Check/guide cookie file setup for age-restricted downloads.
+#
+# `docker exec` bypasses ENTRYPOINT and defaults to root, since the image has
+# no static USER (it's remapped to PUID/PGID at container start instead) —
+# drop to that same unprivileged, correctly-owned user before running.
+#
+# Usage: docker compose exec web2mp3 cookie
+exec setpriv --reuid "${PUID:-1000}" --regid "${PGID:-1000}" --clear-groups python src/cookie_check.py "$@"

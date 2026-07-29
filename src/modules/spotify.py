@@ -1,4 +1,4 @@
-from initialize import spotify_api
+import initialize
 from utils import _parse_retry_after_seconds
 from tag_manager import get_track_tags, manual_track_tags
 from spotipy.exceptions import SpotifyException
@@ -90,7 +90,7 @@ def general_handler(url: str, method) -> list:
     while results['next']:
         # spotify_api.next may also be throttled (HTTP 429)
         try:
-            results = spotify_timeout_handler(spotify_api.next, results)
+            results = spotify_timeout_handler(initialize.get_spotify_client().next, results)
         except RuntimeError as e:
             print(str(e))
             return []
@@ -108,12 +108,12 @@ def general_handler(url: str, method) -> list:
 
 
 def playlist_handler(url: str) -> list:
-    return general_handler(url, spotify_api.playlist_items)
+    return general_handler(url, initialize.get_spotify_client().playlist_items)
 
 
 def album_handler(url: str) -> list:
     # Forwards the album method to the general_handle
-    return general_handler(url, spotify_api.album)
+    return general_handler(url, initialize.get_spotify_client().album)
 
 
 def sort_lookup(query: dict, matched_obj: dict | None) -> Tuple[str | None, dict | None]:
@@ -139,7 +139,7 @@ def get_description(track_url: str, **kwargs) -> dict | None:
     # Gets information about the track that will be used as query for matching
     try:
         item = spotify_timeout_handler(
-            spotify_api.track,
+            initialize.get_spotify_client().track,
             track_url,
             market=market,
             max_time_outs=kwargs.get("max_time_outs", 10),
@@ -175,7 +175,7 @@ def search(search_query, **kwargs) -> List[dict]:
     market = kwargs['market']
     try:
         results = spotify_timeout_handler(
-            spotify_api.search,
+            initialize.get_spotify_client().search,
             q=search_query,
             limit=search_limit,
             market=market,

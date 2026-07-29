@@ -4,10 +4,15 @@ A fully automatic scalable command line interface to download music from the
 internet with proper mp3 tagging and directory structuring.
 ## How to use
 
-**Python Wizard**
+Web2mp3 runs as a Docker container (see "Running with Docker" below for
+setup). Once it's up, the everyday commands are:
 
-The easiest is calling `python main.py` which will start the Wizard that will help 
-you provide input:
+```
+docker compose exec web2mp3 dl --headless <url>
+```
+
+Calling `dl` with no URL and not `--headless` starts an interactive
+wizard that prompts for URLs one at a time:
 
 ```python
 >>> URL or [Abort]?      https://www.youtube.com/watch?v=NgE5mEQiizQ
@@ -27,27 +32,23 @@ Clear youtube match:     The Animals - House Of The Rising Sun (Music Video) [4K
 Success:                 Download added "youtube:N4bFqW_eu2I"
 >>> URL or [Abort]?      
 ```
-Each call to the Wizard should take about a second, since downloading is 
-performed in the background using a daemon, and mp3 tags are applied.  
+Each call should take about a second, since downloading is performed in the
+background using a daemon, and mp3 tags are applied.
 
-Alternatively you can call Web2Mp3 straight from the command line. The
-program does not require URL sanitation (although your shell might):
-
-```
-(demo_env) python main.py https://www.youtube.com/watch?v=NgE5mEQiizQ
-```
+The program does not require URL sanitation (although your shell might).
 
 **Command Line Arguments**  
-Use `main.py --help` for parameter options. You can also, after starting the 
-wizard -instead of providing a URL- pass `params` to print a list of the current
-state of all parameters for inspection.
+Use `docker compose exec web2mp3 dl --help` for parameter options. You
+can also, after starting the wizard -instead of providing a URL- pass
+`params` to print a list of the current state of all parameters for
+inspection.
 
 For example, pass the `quality` flag to set download quality to 123 kB/s, the 
 `reponse` flag to set the default response for an unclear match to the first :
 (closest match) option, and set the `-d` flag to allow for duplicate songs (e.g,
 songs with the same name, for the same author, but on a different album):
 ```
-(demo_env) python src/main.py --quality 123 --response 1 -d`
+docker compose exec web2mp3 dl --quality 123 --response 1 -d
 >>> URL or [Abort]?     params
 quality              123
 response             1
@@ -123,8 +124,10 @@ To speed up the downloading process, Web2mp3 stores a download history in the
 index (`/src/index/index.sqlite3`, a single SQLite database — earlier
 versions stored one file per tracked URI; if you're upgrading from one of
 those, run `python src/migrate_index_to_sqlite.py` once to convert your
-existing history over before running anything else). To avoid these checks,
-the `--do_overwrite` flag can be passed.
+existing history over before running anything else). Run
+`docker compose exec web2mp3 inspect` any time to see how many
+tracks are processed vs. still pending. To avoid these checks, the
+`--do_overwrite` flag can be passed.
 As a final check before downloading , Web2mp3 checks if the song to be 
 downloaded does not already exist in the music directory. It does this by
 checking if the artist already has a song downloaded containing this song name.
@@ -133,48 +136,74 @@ It usually works fine, but in case you want to turn it off you can pass the
 
 ## Get started in 60 Seconds
 
-https://user-images.githubusercontent.com/38399483/234430966-bc7fc4d3-1339-4e9a-97df-a430ecfc70ba.mp4
-Commands shown in the video are as follows:
-```
-git clone https://github.com/MGPoirot/web2mp3.git
-cd web2mp3
-conda create -n demo_env
-conda activate demo_env
-pip install -r requirements.txt
-python src/main.py
-[enter Spotify Client ID and Secret]
-https://www.youtube.com/watch?v=N4bFqW_eu2I
-```
-*Displayed Spotify API credentials have since been deleted.*
+1. Clone the repo:
+   ```
+   git clone https://github.com/MGPoirot/web2mp3.git
+   cd web2mp3
+   ```
+
+2. Create a Spotify app for API credentials (used to look up track
+   metadata): go to https://developer.spotify.com/dashboard and create an
+   app, then copy its **Client ID** and **Client Secret**. In that app's
+   settings, add `https://maartenpoirot.com/contact` as a **Redirect URI**
+   — Spotify requires this exact URI (web2mp3's default login callback) to
+   be explicitly allow-listed on your app before login will work. If you'd
+   rather use your own redirect page, set `SPOTIPY_REDIRECT_URI` in `.env`
+   to it instead and register that one.
+
+3. Configure:
+   ```
+   cp .env.example .env
+   ```
+   Edit `.env` and set `HOST_MUSIC_DIR` (where your music library should
+   live on this machine) and `SPOTIPY_CLIENT_ID`/`SPOTIPY_CLIENT_SECRET`
+   from step 2. Everything else already has a working default (see
+   "Running with Docker" below for what each value does).
+
+4. Build and start the container:
+   ```
+   docker compose up -d --build
+   ```
+
+5. Download something. The first real download is also when Spotify's
+   one-time browser login happens, so run this one interactively (`-it`,
+   no `--headless`):
+   ```
+   docker compose exec -it web2mp3 dl https://www.youtube.com/watch?v=N4bFqW_eu2I
+   ```
+   This prints a Spotify login URL — open it in your own browser, log in
+   and authorize, then copy the full URL of the page you land on afterward
+   and paste it back into the terminal when prompted. That login is cached
+   in `.config/.spotify_cache`, so it only happens once. Once the match
+   succeeds you'll land in the `>>> URL or [Abort]?` prompt — type `Abort`
+   to exit.
+
+6. For every download after that, this is all you need:
+   ```
+   docker compose exec web2mp3 dl --headless <url>
+   ```
+
+See "Running with Docker" below for the `cookie`/`inspect` commands, what
+each `.env` value does, migrating an existing non-Docker install, and
+deploying via a GUI stack manager (Portainer, OpenMediaVault, etc.).
 
 ## Running with Docker
 
-Web2mp3 can also run as a Docker container via `docker-compose`, keeping the
-Python environment self-contained and confining filesystem access to a
-handful of explicit mounts (music library, config/auth, logs, download
-index) instead of the whole host — plus an in-memory `tmpfs` mount for
-daemon coordination locks, which is intentionally not persisted (see below).
-A pre-built image is published to
-`ghcr.io/mgpoirot/web2mp3` on every tagged release, so `docker-compose.yml`
-and a `.env` file are all you need — no local build or source checkout
-required (`build: .` is also present in the compose file for local
-development; `docker compose up` prefers a locally-built image if you've run
-`docker compose build`, otherwise it pulls from GHCR).
+Web2mp3 runs as a Docker container via `docker compose`, keeping the Python
+environment self-contained and confining filesystem access to a handful of
+explicit mounts (music library, config/auth, logs, download index) instead
+of the whole host — plus an in-memory `tmpfs` mount for daemon coordination
+locks, which is intentionally not persisted (see below). A pre-built image
+is also published to `ghcr.io/mgpoirot/web2mp3` on every tagged release
+(`build: .` in `docker-compose.yml` is what makes `--build` above work from
+a source checkout; omitting `--build` instead pulls the published image).
 
-```
-cp .env.example .env    # set HOST_MUSIC_DIR and PUID/PGID
-cp .config/.env.example .config/.env    # fill in Spotify creds and LOCATION
-docker compose up -d
-```
-
-Fill in every value in `.config/.env` before first run (`MUSIC_DIR`,
-`SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`, `LOCATION`) and web2mp3's
-interactive setup wizard becomes a pure fallback — it only triggers if one
-of those four is still missing. It can't fully replace the Spotify OAuth
-login itself, though: that first authorization has to happen in a browser,
-so it's an unavoidable one-time interactive step regardless of how complete
-`.config/.env` is (see below for running that step via
-`docker compose exec -it`).
+`.env` (from step 3 above) is the only config file — there's no separate
+app-level config and no interactive setup wizard.
+`SPOTIPY_CLIENT_ID`/`SPOTIPY_CLIENT_SECRET` are the only values you must
+set (there's no sensible default for someone else's Spotify credentials);
+everything else falls back to a sensible default with a printed console
+notice if you leave it out (e.g. `LOCATION` falls back to `US`).
 
 The container process runs as a non-root user, remapped at startup to the
 `PUID`/`PGID` you set in `.env` (default `1000`/`1000`) — no rebuild needed
@@ -192,39 +221,49 @@ bind-mounted to disk: it's purely in-container coordination state, wiped
 clean on every container start, so there's nothing stale left behind by a
 hard crash or `docker compose kill` to clean up. Actual commands are run
 against the already-running container with `docker compose exec`, through
-the `as-app` wrapper (plain `docker compose exec` defaults to root, since
-the image has no static user baked in — `as-app` drops to the same
-`PUID`/`PGID`-mapped user as the main process before running anything):
+three small commands installed in the image (plain `docker compose exec`
+defaults to root, since the image has no static user baked in — each of
+these drops to the same `PUID`/`PGID`-mapped user as the main process
+before running anything):
 
 ```
-# first time only: completes the setup wizard and Spotify OAuth login
-docker compose exec -it web2mp3 as-app python src/main.py
+# download a URL, non-interactively
+docker compose exec web2mp3 dl --headless <url>
 
-# subsequent, non-interactive downloads
-docker compose exec web2mp3 as-app python src/main.py --headless <url>
+# interactive wizard (also how you'd redo the Spotify login, if ever needed)
+docker compose exec -it web2mp3 dl
+
+# check cookie file setup (guides you through adding one if missing)
+docker compose exec web2mp3 cookie
+
+# check index status (how many tracks processed vs. still pending)
+docker compose exec web2mp3 inspect
 ```
 
 To enable age-restricted downloads, drop a `*_cookies.txt` file (see
 "Downloading Age restricted content" below) into `./.config/` on the host —
-it's bind-mounted into the container and auto-detected there.
+it's bind-mounted into the container and auto-detected there. Run
+`docker compose exec web2mp3 cookie` any time to check whether the one
+currently in place looks valid.
 
 **Migrating an existing (non-Docker) install:** point `HOST_MUSIC_DIR` at
 your existing music library and keep using your existing `.config/`,
 `.logs/`, and `src/index/` directories as-is (leave any existing
 `.daemons/` behind — it's not used by the container, see above) — they
 bind-mount straight into the container at the same relative paths the app
-already uses. If those directories were previously created by a different
-user/UID (e.g. you ran web2mp3 as root before Dockerizing it), the
-container's non-root user won't be able to write to the existing files in
-them; fix this once with:
+already uses. Copy your `SPOTIPY_CLIENT_ID`/`SPOTIPY_CLIENT_SECRET`/
+`LOCATION` values from wherever your old install kept them into the new
+root `.env` — that's the only file read now. `MUSIC_DIR`, `COOKIE_FILE` and
+`DENO_BIN` don't need to be set at all: `MUSIC_DIR` always defaults to
+`/music` in the container, and the cookie file/Deno binary are auto-detected
+fresh on every start. If those directories were previously created by a
+different user/UID (e.g. you ran web2mp3 as root before Dockerizing it),
+the container's non-root user won't be able to write to the existing files
+in them; fix this once with:
 ```
 sudo chown -R <PUID>:<PGID> .config .logs src/index
 ```
-using the same `PUID`/`PGID` values as in your `.env`. In `.config/.env`,
-make sure `MUSIC_DIR` is set to `/music` (the fixed path the container
-mounts your library to) rather than whatever host path it pointed to
-before, and clear/remove any `DENO_BIN` line so it's auto-detected from
-`PATH` inside the container.
+using the same `PUID`/`PGID` values as in your `.env`.
 
 **Troubleshooting DNS:** `docker-compose.yml` sets explicit `dns:` servers
 (`1.1.1.1`, `8.8.8.8`) because Docker's embedded resolver can fail to pick
@@ -256,6 +295,9 @@ services:
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
+      SPOTIPY_CLIENT_ID: ${SPOTIPY_CLIENT_ID}
+      SPOTIPY_CLIENT_SECRET: ${SPOTIPY_CLIENT_SECRET}
+      LOCATION: ${LOCATION:-US}
     volumes:
       - ${HOST_MUSIC_DIR}:/music
       - ${WEB2MP3_STATE_DIR}/.config:/app/.config
@@ -271,13 +313,16 @@ HOST_MUSIC_DIR=/path/to/your/Music
 WEB2MP3_STATE_DIR=/path/to/wherever/web2mp3/state/should/live
 PUID=1000
 PGID=1000
+SPOTIPY_CLIENT_ID=
+SPOTIPY_CLIENT_SECRET=
+LOCATION=US
 ```
 
 After creating the stack, pull and start it from the GUI, then run the
-first-time setup/OAuth wizard and subsequent downloads the same way as
+first-time Spotify OAuth login and subsequent downloads the same way as
 above, from a shell:
 ```
-docker compose -p web2mp3 exec -it web2mp3 as-app python src/main.py
+docker compose -p web2mp3 exec -it web2mp3 dl
 ```
 (`-p web2mp3` — or whatever project name the GUI assigned the stack —
 targets the right compose project when running commands outside the GUI.)
@@ -399,7 +444,10 @@ References:
 - Repeated HTTP 429 discussion (Spotipy): https://stackoverflow.com/questions/78411698/spotify-api-repeated-http-429-error-using-spotipy
 - 180 calls/minute statement (example call limiting writeup): https://medium.com/mendix/limiting-your-amount-of-calls-in-mendix-most-of-the-time-rest-835dde55b10e
 
-DAEMONs can then be initiated manually by running `python download_daemon.py`.
+DAEMONs can then be initiated manually by running `python download_daemon.py`
+(inside the container: `docker compose exec web2mp3 setpriv --reuid "$PUID" --regid "$PGID" --clear-groups python src/download_daemon.py --verbose`
+— the same privilege-drop `dl`/`cookie`/`inspect` do internally, spelled
+out manually since this isn't one of them).
 You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run download_daemon.py in verbose mode and do not want all tasks in the SDB
 to be processed straight away.
 
@@ -432,11 +480,15 @@ are being processed. Therefor, there is the option to run in verbose mode:
 
 ## Downloading Age restricted content
 
-Downloading age restricted content from YouTube requires a `www.youtube.com_cookies.txt` cookies file containing the `__Secure-1PSID` cookie. 
+Downloading age restricted content from YouTube requires a `www.youtube.com_cookies.txt` cookies file containing the `__Secure-1PSID` cookie.
+
+Run `docker compose exec web2mp3 cookie` at any time to check
+whether a cookie file is currently configured and looks valid — if not, it
+prints the same setup steps below directly to the console.
 
 [Instructions on how to get this file can be found here](https://github.com/ytdl-org/youtube-dl#how-do-i-pass-cookies-to-youtube-dl). 1. Install extension "Get cookies.txt LOCALLY", 2. Go to YouTube, 3. Open the extension, 4. Export your cookies, 
 
-Place the cookie file anywhere in the web2mp3 home directory with a name ending in `'*_cookies.txt'`. Since these files are private, the `.gitignore` is set up to ignore these files. This is an example of what the cookies file will require to contain:  
+Place the cookie file into `./.config/` on the host, with a name ending in `'*_cookies.txt'` — it's bind-mounted into the container and auto-detected there. Since these files are private, the `.gitignore` is set up to ignore these files. This is an example of what the cookies file will require to contain:  
 
 ```
 # Netscape HTTP Cookie File
@@ -448,7 +500,6 @@ HiIB398G9unpNIO8IBU9ihkb8y7jhv7YIVOB_867vYIVGhuv78_vyuio68_n8og8oV8Log.
 Audio you download using this script can not contain third-party intellectual property (such as copyrighted material) unless you have permission from that party or are otherwise legally entitled to do so (including by way of any available exceptions or limitations to copyright or related rights provided for in European Union law). You are legally responsible for the Content you submit to the Service. 
 
 *  `python 3.15` or above
-*  `python-dotenv`
 *  `spotipy`
 *  `yt-dlp`
 *  `ytmusicapi`

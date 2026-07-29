@@ -22,8 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-COPY as-app /usr/local/bin/as-app
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/as-app \
+COPY dl inspect cookie /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/dl /usr/local/bin/inspect /usr/local/bin/cookie \
     && mkdir -p .config .logs .daemons src/index Music \
     && chmod -R a+rX /app
 

@@ -1,4 +1,4 @@
-from initialize import spotify_api
+import initialize
 from utils import input_is, flatten, timeout_handler
 from datetime import datetime
 import logging
@@ -59,7 +59,7 @@ def get_track_tags(track_item: dict, do_light: bool = False, logger: logging.Log
         disc_max = _ALBUM_DISC_MAX_CACHE[album_uri]
     else:
         disc_max = timeout_handler(
-            func=spotify_api.album_tracks,
+            func=initialize.get_spotify_client().album_tracks,
             album_id=album_uri,
             offset=album['total_tracks'] - 1,
             _logger=logger,
@@ -85,7 +85,7 @@ def get_track_tags(track_item: dict, do_light: bool = False, logger: logging.Log
 
         if g_str is None or a_uri not in _ARTIST_IMAGE_CACHE:
             a_meta = timeout_handler(
-                func=spotify_api.artist,
+                func=initialize.get_spotify_client().artist,
                 artist_id=a_uri,
                 _logger=logger,
             ) or {}
@@ -158,7 +158,7 @@ def manual_track_tags(market, duration=None, print_space=24) -> dict:
     tag_series = tag_dict
     if tag_series['album'] is None:
         tag_series['album'] = tag_series.title
-    found_artist = timeout_handler(spotify_api.search,
+    found_artist = timeout_handler(initialize.get_spotify_client().search,
                                    q=tag_series['artist'],
                                    market=market,
                                    limit=1,
