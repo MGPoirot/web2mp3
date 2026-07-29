@@ -206,18 +206,27 @@ def get_description(track_url: str, query: str | None = None, **kwargs) -> dict 
             try_manual = False
 
         # Act according to answer on how to continue
-        if not try_manual or input_is('Abort', try_manual):
+        # Accept both the letter/word shortcuts (input_is) and the numbers
+        # actually shown in the prompt above ("1)", "2)", "3)").
+        if not try_manual or try_manual == '3' or input_is('Abort', try_manual):
             return None
-        elif input_is('Query', try_manual) or try_manual == 1:
+        elif try_manual == '1' or input_is('Query', try_manual):
             new_yt_query = input('Give YouTube Query:  ')
             return get_description(track_url, new_yt_query, **kwargs)
-        elif input_is('Description', try_manual) or try_manual == 2:
+        elif try_manual == '2' or input_is('Description', try_manual):
             search_result = {
                 'title': input('Video title?  '),
                 'duration_seconds': input('Video duration in seconds?  '),
                 'artists': [{'name': input('Artist name?  ')}],
                 'album': {'name': input('Album name?  ')},
             }
+        else:
+            # Any unrecognized response falls through here rather than
+            # continuing on with search_result still None, which would
+            # otherwise crash trying to unpack it below.
+            logger.warning('%s Unrecognized response "%s", aborting.',
+                           'ValueError:'.ljust(ps), try_manual)
+            return None
 
     # Safely get all parameters
     artist = get_artist(search_result)
