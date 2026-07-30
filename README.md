@@ -240,6 +240,16 @@ docker compose exec web2mp3 cookie
 docker compose exec web2mp3 inspect
 ```
 
+`inspect` (also works via plain `docker exec <container-name> inspect` if
+you're not using `docker compose exec`) prints something like:
+```
+A cookie file was found: "/app/.config/cookies.txt"
+INDEX INFORMATION:
+- number of processed records    94250
+- number of unprocessed records     14
+- location                      /app/src/index/index.sqlite3
+```
+
 To enable age-restricted downloads, drop a `*_cookies.txt` file (see
 "Downloading Age restricted content" below) into `./.config/` on the host —
 it's bind-mounted into the container and auto-detected there. Run

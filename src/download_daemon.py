@@ -179,7 +179,7 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
     logger.info("download_track %s", conclusion)
 
 
-def syscall(verbose: bool = False, sleep_seconds: int = 10) -> None:
+def syscall(verbose: bool = False, sleep_seconds: int = 10) -> subprocess.Popen:
     """Spawn a daemon process.
 
     Uses subprocess (no shell), so it's cross-platform and doesn't depend on '&' or pythonw.
@@ -188,13 +188,13 @@ def syscall(verbose: bool = False, sleep_seconds: int = 10) -> None:
     args = [
         sys.executable,
         __file__,
-        "--sleep-seconds",
+        "--sleep_seconds",
         str(sleep_seconds),
     ]
     if verbose:
         args.append("--verbose")
 
-    subprocess.Popen(
+    return subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -231,9 +231,16 @@ def start_daemons(max_daemons: int = 4, verbose: bool = False, sleep_seconds: in
     for _i, _ in zip(range(max_daemons), get_tasks()):
         n_daemons = len(glob(daemon_dir.format("[0-9]")))
         if n_daemons < max_daemons:
-            n_started += 1
             # syscall already spawns a background process correctly; no need for multiprocessing wrapper
-            syscall(verbose=False, sleep_seconds=sleep_seconds)
+            proc = syscall(verbose=False, sleep_seconds=sleep_seconds)
+            # Give it a brief moment to fail fast (e.g. a bad CLI arg) rather
+            # than trusting a bare Popen() call as proof it's actually
+            # running -- otherwise this count can silently lie forever.
+            time.sleep(0.3)
+            if proc.poll() is None:
+                n_started += 1
+            else:
+                print(f'Warning: a DAEMON failed to start (exit code {proc.returncode}).')
         else:
             break
     return n_started
