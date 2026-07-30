@@ -97,7 +97,12 @@ def location_validator(market: str) -> bool:
 # Where are we?
 home_dir = Path(__file__).parents[1]
 
-music_dir = Path(_fallback('MUSIC_DIR', '/music'))
+
+# Unlike LOCATION, MUSIC_DIR has nothing to notify about: /music is always
+# the correct value in this Docker setup (docker-compose.yml's HOST_MUSIC_DIR
+# is what actually controls where music ends up on the host) -- it's an
+# internal fixed path, not a user-facing setting, so no fallback notice.
+music_dir = Path(os.environ.get('MUSIC_DIR', '/music'))
 default_location = _fallback('LOCATION', 'US')
 if not location_validator(default_location):
     print(f'[web2mp3] Warning: "{default_location}" is not a recognized Spotify '

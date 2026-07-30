@@ -190,8 +190,33 @@ def get_description(track_url: str, query: str | None = None, **kwargs) -> dict 
         track_url = track_url.split('&')[0]
         track_uri = url2uri(track_url).split('.')[-1] if query is None else query
         meta = YTMusic().get_song(track_uri)['videoDetails']
-        query = f'{meta["title"]} {meta["author"]}'
+        raw_title, raw_author = meta['title'], meta['author']
+        raw_duration = int(meta['lengthSeconds'])
+        query = f'{raw_title} {raw_author}'
+    else:
+        raw_duration = None
     search_result = search_yt(query, market, limit=1)[0]
+
+    # search_yt() "refines" the raw video into a canonical YouTube Music
+    # entry by fuzzy title/artist match alone -- it can land on a wildly
+    # different, unrelated song (e.g. a 19s raw clip "refined" into an
+    # unrelated multi-minute track sharing the same title text). If the
+    # refined candidate's duration doesn't fit the raw video's own actual
+    # length, don't trust it: fall back to the raw video's own
+    # title/author/duration instead of silently matching on the substitute.
+    if search_result is not None and raw_duration:
+        candidate_duration = search_result.get('duration_seconds')
+        tolerance = kwargs.get('tolerance', 0.1)
+        if candidate_duration and abs(candidate_duration / raw_duration - 1) > tolerance:
+            logger.warning(
+                '%s Ignoring %ss YouTube Music refinement for a %ss video '
+                '(too different); using the video\'s own title/duration instead.',
+                'ValueError:'.ljust(ps), candidate_duration, raw_duration)
+            search_result = {
+                'title': raw_title,
+                'artists': [{'name': raw_author}],
+                'duration_seconds': raw_duration,
+            }
 
     if search_result is None:
         logger.warning('%s No video found for "%s"', 'ValueError:'.ljust(ps), track_url)

@@ -286,6 +286,16 @@ def lookup(query: dict, platform, logger: callable = print, sort_by='none',
             idx = proceed - 1
             if idx > len(items) or idx < 0:
                 logger.info(f'Invalid index {idx + 1} for {len(items)} options.')
+            elif accept_origin == 'default' and abs(relative_d[idx] - 1) >= duration_tolerance:
+                # Never silently auto-accept a candidate whose duration is
+                # clearly off -- with no human reviewing it, this is exactly
+                # how e.g. a 19s clip ends up "matched" to an unrelated
+                # multi-minute track. A human explicitly picking this same
+                # index interactively is still allowed through below.
+                item_title, item_artist = platform.item2desc(items[idx])
+                logger.info('%s %s', f'Rejected {platform.name} match:'.ljust(ps),
+                            f'{item_title} - {item_artist} (duration mismatch, auto-accept declined)')
+                match = False
             else:
                 match = platform.get_meta_info(items[idx])
                 tit_art = f'{match["title"]} - {match["artist"]}'
