@@ -3,7 +3,6 @@ certifi==2024.8.30
 charset-normalizer==3.4.0
 click==8.1.7
 colorama==0.4.6
-coverage==5.5
 deprecation==2.1.0
 eyed3==0.9.7
 fastapi==0.115.6

@@ -56,7 +56,15 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
     # Retrieve and extract song properties from the index
     download_info = index.read(track_uri)
     if download_info is None:
-        logger.warning("Download instructions are empty.")
+        logger.warning(
+            'No pending download entry for "%s". This means the match step '
+            "above did not actually add this URI as pending -- it either "
+            "failed, was already marked done from an earlier attempt, or "
+            "there's a URI mismatch bug. Check the "
+            "match log lines above (look for Success/Skipped/Failed) and "
+            "resubmit the URL if needed.",
+            track_uri,
+        )
         logger.info("download_track %s", conclusion)
         return
 

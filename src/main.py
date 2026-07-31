@@ -354,19 +354,19 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
 
     # Skip in case the URL is already in the index
     if index.has_uri(track_uri) and not do_overwrite:
-        return f'Skipped: TrackExists "{track_uri}"'
+        return f'Skipped: TrackExists "{track_uri}"', None
 
     # Get a description of the object to use for matching.
     # IMPORTANT: forward CLI/runtime kwargs (e.g. max_time_outs) to the source.
     # Some sources (notably Spotify) rely on these for retry/throttle handling.
     query = source.get_description(track_url=track_url, logger=logger, **kwargs)
     if query is None:  # Failed to retrieve query
-        return f'Failed: Could not form {source.name.capitalize()} query'
+        return f'Failed: Could not form {source.name.capitalize()} query', None
 
     # Skip if the path based on this file exists
     _, track_tags = source.sort_lookup(query, None)
     if file_from_tags_exists(track_tags, logger, avoid_duplicates):
-        return 'Skipped: FileExists'
+        return 'Skipped: FileExists', None
 
     # Spotify's metadata of certain fields cannot be incomplete
     if source.name == 'spotify':
@@ -374,7 +374,7 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
         if any([not bool(query[c]) for c in req_fields if c in query]):
             index.write(track_uri)
             return f'Failed: Insufficient meta data to ' \
-                   f'complete the processing of "{track_uri}".'
+                   f'complete the processing of "{track_uri}".', None
 
     # Match the object
     search = source.get_search_platform()
@@ -385,30 +385,36 @@ def do_match(track_url, source, logger: callable = print, **kwargs):
 
     if match_obj is False:
         return f'Failed: Could not match {source.name.capitalize()} to ' \
-               f'{search.name.capitalize()} item'
+               f'{search.name.capitalize()} item', None
 
+    # NOTE: for a Spotify-sourced URL, sort_lookup returns the *YouTube*
+    # track_uri (the actual audio to download) here, not source.url2uri's own
+    # (Spotify) uri -- they only coincide when source is youtube. Whatever
+    # sort_lookup returns is exactly what gets written as the pending
+    # download entry below, so it's also the only correct value to hand back
+    # to callers (e.g. --sync) that want to act on that specific entry.
     track_uri, track_tags = source.sort_lookup(query, match_obj)
     tags_uri = get_tags_uri(track_tags)
     source_uri = source.url2uri(track_url)  # 1 id may >1 urls
 
     # 1) Check if the file, or a title_similarity file does not exist already
     if file_from_tags_exists(track_tags, logger, avoid_duplicates):
-        return 'Skipped: FileExists'
+        return 'Skipped: FileExists', None
 
     #  2) Check if the found tracks is already in the index
     if not do_overwrite:
         ctrl = [('Tag', tags_uri), ('Track', track_uri), ('Source', source_uri)]
         errs = [err for err, idx in ctrl if index.has_uri(idx)]
         if any(errs):
-            return ' '.join(['Skipped:', *[f'{e}Exists' for e in errs]])
+            return ' '.join(['Skipped:', *[f'{e}Exists' for e in errs]]), None
 
     # Set index items
     if tags_uri != 'manual':
         index.write(tags_uri)
     index.write(track_uri, tags=track_tags, settings=kwargs, overwrite=True)
-    return f'Success: Download added.\n' \
-           f'    -> TAG   {tags_uri}\n' \
-           f'    -> AUDIO {track_uri}'
+    return (f'Success: Download added.\n'
+            f'    -> TAG   {tags_uri}\n'
+            f'    -> AUDIO {track_uri}'), track_uri
 
 
 def match_audio_with_tags(track_url: str, **kwargs):
@@ -434,28 +440,28 @@ def match_audio_with_tags(track_url: str, **kwargs):
         else:
             logger.info('%s %s', f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
 
-        search_result = do_match(track_url, source, logger, **kwargs)
-        if isinstance(search_result, tuple):
-            status, tags_uri, source_uri, track_uri = search_result
-            index.write(tags_uri, overwrite=False)
-            index.write(source_uri, overwrite=False)
-        else:
-            status = search_result
-            track_uri = source.url2uri(track_url)
+        status, download_uri = do_match(track_url, source, logger, **kwargs)
 
         # Only clear an existing index entry.
         # On failures that happen *before* an index item is created (e.g. Spotify
         # throttling leading to "Failed: Could not form Spotify query"), we must
         # NOT create an empty marker file, as that incorrectly signals completion.
+        # NOTE: this is source.url2uri's own uri (e.g. the Spotify tag for a
+        # Spotify-sourced URL), which is deliberately NOT the same thing as
+        # download_uri below when source and search platform differ -- see
+        # do_match's own note on why sort_lookup's track_uri is the only
+        # correct value to hand back to callers that want to act on the
+        # actual pending download entry.
+        track_uri = source.url2uri(track_url)
         if index.has_uri(track_uri):
             index.write(track_uri, overwrite=False)
 
         succeeded = status.startswith('Success')
 
         # Nicely format any status string
-        status = status.split(':')
-        logger.info(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
-        return track_uri if succeeded else None
+        status_parts = status.split(':')
+        logger.info(str(status_parts[0] + ':').ljust(ps) + ':'.join(status_parts[1:]) + '\n')
+        return download_uri if succeeded else None
     finally:
         # Critical: release the per-URL log file handle(s).
         close_logger_handlers(logger)

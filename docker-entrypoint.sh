@@ -25,4 +25,13 @@ chown "$PUID:$PGID" .daemons
 # holds a small sqlite db and small per-submission transcripts.
 chown -R "$PUID:$PGID" .gui
 
+# setpriv changes uid/gid but not $HOME -- left as root's "/root", tools
+# like yt-dlp resolve their cache dir off $HOME and would try (and fail) to
+# write to /root/.cache once running as the unprivileged user. Point HOME
+# at appuser's real home instead, and make sure it's actually owned by
+# whatever PUID/PGID it just got remapped to (usermod -u alone doesn't
+# chown existing files).
+chown -R "$PUID:$PGID" /home/appuser
+export HOME=/home/appuser
+
 exec setpriv --reuid "$PUID" --regid "$PGID" --clear-groups "$@"

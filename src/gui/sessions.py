@@ -70,11 +70,15 @@ def set_status(sid: str, status: str) -> None:
         )
 
 
+MAX_SIDEBAR_ENTRIES = 100
+
+
 def list_all() -> list[dict]:
-    """Most recent submissions first, for the sidebar."""
+    """Most recent submissions first, for the sidebar (capped, oldest dropped)."""
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT id, url, status, created_at FROM submissions ORDER BY created_at DESC"
+            "SELECT id, url, status, created_at FROM submissions ORDER BY created_at DESC LIMIT ?",
+            (MAX_SIDEBAR_ENTRIES,),
         ).fetchall()
     return [{'id': r[0], 'url': r[1], 'status': r[2], 'created_at': r[3]} for r in rows]
 
