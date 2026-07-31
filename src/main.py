@@ -7,7 +7,7 @@ from tag_manager import get_track_tags, manual_track_tags, get_tags_uri
 import sys
 import re
 import index
-from download_daemon import start_daemons
+from download_daemon import start_daemons, download_track
 import click
 from click import Choice
 from typing import List
@@ -430,10 +430,10 @@ def match_audio_with_tags(track_url: str, **kwargs):
         # Get the source platform module and the platform we need to match it with
         source = get_url_platform(track_url)
         if source is None:  # matching failed
-            return f'UnknownPlatform "{track_url}"'
+            return None
         else:
             logger.info('%s %s', f'New {source.name} URL:'.ljust(ps), strip_url(track_url))
-        
+
         search_result = do_match(track_url, source, logger, **kwargs)
         if isinstance(search_result, tuple):
             status, tags_uri, source_uri, track_uri = search_result
@@ -450,9 +450,12 @@ def match_audio_with_tags(track_url: str, **kwargs):
         if index.has_uri(track_uri):
             index.write(track_uri, overwrite=False)
 
+        succeeded = status.startswith('Success')
+
         # Nicely format any status string
         status = status.split(':')
         logger.info(str(status[0] + ':').ljust(ps) + ':'.join(status[1:]) + '\n')
+        return track_uri if succeeded else None
     finally:
         # Critical: release the per-URL log file handle(s).
         close_logger_handlers(logger)
@@ -496,6 +499,7 @@ def main(**kwargs):
     headless = kwargs['headless']
     max_daemons = kwargs['max_daemons']
     verbose = kwargs['verbose']
+    sync = kwargs.get('sync', False)
 
     # Unpack URLs that contain playlists or albums
     for url in iter_unpacked_urls(raw_urls):
@@ -504,14 +508,28 @@ def main(**kwargs):
         # Do not pass the content of an entire playlist but just the specific track
         kwargs['urls'] = url
         # Match audio and tags and write it to a file in the index
-        match_audio_with_tags(url, **kwargs)
+        track_uri = match_audio_with_tags(url, **kwargs)
+        if sync:
+            # Download synchronously, in-process, right here, instead of
+            # handing off to a detached background daemon -- used by the GUI
+            # so one continuous stream shows match -> download -> tag -> done.
+            if track_uri:
+                dl_logger = configure_logger(
+                    name=f"web2mp3.download.{shorten_url(url)}",
+                    log_file=log_dir.format(track_uri, "txt"),
+                    console=True,
+                )
+                try:
+                    download_track(track_uri, logger=dl_logger)
+                finally:
+                    close_logger_handlers(dl_logger)
         # Start the daemons during the matching of further items
-        if input_is('During', init_daemons):
+        elif input_is('During', init_daemons):
             n_started = start_daemons(max_daemons, verbose)
             if n_started and not verbose:
                 print(f'{n_started} DAEMONs started')
     # Start the daemons after the matching of all items
-    if input_is('After', init_daemons):
+    if not sync and input_is('After', init_daemons):
         n_started = start_daemons(max_daemons, verbose)
         if n_started and not verbose:
             print(f'{n_started} DAEMONs started')
@@ -545,6 +563,9 @@ def main(**kwargs):
               help="Maximum number of DAEMONs.")
 @click.option("-h", "--headless", is_flag=True, default=False,
               help="To exit when arguments have been processed.")
+@click.option("--sync", is_flag=True, default=False,
+              help="Download synchronously in-process after a match, instead "
+                   "of handing off to a background DAEMON (used by the GUI).")
 @click.option("-i", "--init_daemons", default="during",
               type=Choice(['During', 'After', 'Not'], case_sensitive=False),
               help="When to initiate DAEMONs.")

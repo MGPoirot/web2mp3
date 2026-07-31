@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web2MP3</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside id="sidebar">
+    <h2>Web2MP3</h2>
+    <div id="history"></div>
+  </aside>
+
+  <main>
+    <form id="submit-form">
+      <input id="url-input" type="text" placeholder="Paste a YouTube or Spotify URL..." autocomplete="off" autofocus>
+      <button type="submit">Go</button>
+    </form>
+
+    <div id="output" class="output"></div>
+
+    <form id="answer-form" class="answer-row hidden">
+      <input id="answer-input" type="text" placeholder="Type your response..." autocomplete="off">
+      <button type="submit">Send</button>
+    </form>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

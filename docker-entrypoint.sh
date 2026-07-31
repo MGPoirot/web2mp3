@@ -9,7 +9,7 @@ PGID="${PGID:-1000}"
 groupmod -o -g "$PGID" appuser
 usermod -o -u "$PUID" appuser
 
-mkdir -p .config .logs .daemons src/index
+mkdir -p .config .logs .daemons src/index .gui/transcripts
 
 # .daemons is a tmpfs mount (see docker-compose.yml) — it's purely
 # in-container coordination state (PID lock files), so it's mounted fresh
@@ -18,5 +18,11 @@ mkdir -p .config .logs .daemons src/index
 # means the old stale-lock-cleanup-on-crash concern no longer applies: a
 # fresh tmpfs has nothing stale to clean up.
 chown "$PUID:$PGID" .daemons
+
+# .gui is a bind mount; Docker auto-creates it owned by root the first time
+# it doesn't exist on the host, and the mkdir -p above (still running as
+# root) doesn't fix that. -R is fine here: unlike /music, this only ever
+# holds a small sqlite db and small per-submission transcripts.
+chown -R "$PUID:$PGID" .gui
 
 exec setpriv --reuid "$PUID" --regid "$PGID" --clear-groups "$@"

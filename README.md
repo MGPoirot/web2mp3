@@ -5,7 +5,9 @@ internet with proper mp3 tagging and directory structuring.
 ## How to use
 
 Web2mp3 runs as a Docker container (see "Running with Docker" below for
-setup). Once it's up, the everyday commands are:
+setup). Once it's up, the everyday commands are (there's also an optional
+one-page web GUI if you'd rather not use a shell at all — see "Web GUI"
+further down):
 
 ```
 docker compose exec web2mp3 dl --headless <url>
@@ -302,17 +304,23 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    ports:
+      - "${GUI_PORT:-4546}:${GUI_PORT:-4546}"
     environment:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-1000}
       SPOTIPY_CLIENT_ID: ${SPOTIPY_CLIENT_ID}
       SPOTIPY_CLIENT_SECRET: ${SPOTIPY_CLIENT_SECRET}
       LOCATION: ${LOCATION:-US}
+      GUI_ENABLED: ${GUI_ENABLED:-true}
+      GUI_PORT: ${GUI_PORT:-4546}
+      GUI_PASSWORD: ${GUI_PASSWORD:-}
     volumes:
       - ${HOST_MUSIC_DIR}:/music
       - ${WEB2MP3_STATE_DIR}/.config:/app/.config
       - ${WEB2MP3_STATE_DIR}/.logs:/app/.logs
       - ${WEB2MP3_STATE_DIR}/src/index:/app/src/index
+      - ${WEB2MP3_STATE_DIR}/.gui:/app/.gui
     tmpfs:
       - /app/.daemons
 ```
@@ -326,6 +334,9 @@ PGID=1000
 SPOTIPY_CLIENT_ID=
 SPOTIPY_CLIENT_SECRET=
 LOCATION=US
+GUI_ENABLED=true
+GUI_PORT=4546
+GUI_PASSWORD=
 ```
 
 After creating the stack, pull and start it from the GUI, then run the
@@ -336,6 +347,39 @@ docker compose -p web2mp3 exec -it web2mp3 dl
 ```
 (`-p web2mp3` — or whatever project name the GUI assigned the stack —
 targets the right compose project when running commands outside the GUI.)
+
+## Web GUI (optional)
+
+Web2mp3 can also run its own small web page — not to be confused with the
+GUI *stack managers* (Portainer/OpenMediaVault) described above. It's one
+page: paste a URL into a textbox, watch the exact same matching → download →
+tagging pipeline stream live, and browse previous submissions from a
+sidebar. It's on by default; disable it if you don't want it.
+
+```
+# in .env
+GUI_ENABLED=true      # set to false to disable it entirely
+GUI_PORT=4546         # host and container port (kept in sync)
+GUI_PASSWORD=         # optional; unset = no auth (fine for LAN-only use)
+```
+
+With `docker-compose.yml`'s port mapping in place, visit
+`http://<host>:4546`. If `GUI_PASSWORD` is set, your browser will prompt for
+credentials (any username, that password) the first time — this applies to
+every request including the live connection, so a wrong password simply
+won't stream anything back.
+
+If a submission's match is ambiguous, the exact same prompt the CLI would
+show appears as an input box right in the page — answer it the same way
+you would at a terminal (a number to pick a candidate, `Manual`, `Abort`,
+etc.) and the stream continues. Each submission runs as its own isolated
+process, so multiple people can use the page at once without one
+submission's output leaking into another's.
+
+Setting `GUI_ENABLED=false` returns the container to exactly its previous
+behavior — it just idles, and `dl`/`cookie`/`inspect` via `docker exec` are
+completely unaffected either way; the GUI is an additive alternative to
+those, not a replacement.
 
 ## Directory structuring
 

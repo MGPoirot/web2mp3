@@ -8,10 +8,13 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     env_file: .env
+    ports:
+      - "${GUI_PORT:-4546}:${GUI_PORT:-4546}"
     volumes:
       - ${HOST_MUSIC_DIR}:/music
       - ./.config:/app/.config
       - ./.logs:/app/.logs
       - ./src/index:/app/src/index
+      - ./.gui:/app/.gui
     tmpfs:
       - /app/.daemons

@@ -20,6 +20,9 @@ Music/
 # Index files
 src/index
 
+# GUI submission history/transcripts
+.gui/
+
 # Environment / secrets
 .env
 .env.*

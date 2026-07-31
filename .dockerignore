@@ -5,6 +5,7 @@ Music/
 .logs/
 .daemons/
 src/index/
+.gui/
 local/
 __pycache__/
 *.pyc

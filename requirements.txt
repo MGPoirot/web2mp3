@@ -6,6 +6,7 @@ colorama==0.4.6
 coverage==5.5
 deprecation==2.1.0
 eyed3==0.9.7
+fastapi==0.115.6
 filetype==1.2.0
 idna==3.10
 packaging==24.2
@@ -18,5 +19,6 @@ requests==2.32.3
 spotipy==2.24.0
 toml==0.10.2
 urllib3==2.2.3
+uvicorn[standard]==0.34.0
 yt-dlp==2026.7.4
 ytmusicapi==1.8.2

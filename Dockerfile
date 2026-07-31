@@ -22,10 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY docker-cmd.sh /usr/local/bin/docker-cmd.sh
 COPY dl inspect cookie /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/dl /usr/local/bin/inspect /usr/local/bin/cookie \
-    && mkdir -p .config .logs .daemons src/index Music \
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/docker-cmd.sh \
+        /usr/local/bin/dl /usr/local/bin/inspect /usr/local/bin/cookie \
+    && mkdir -p .config .logs .daemons src/index .gui/transcripts Music \
     && chmod -R a+rX /app
 
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["sleep", "infinity"]
+CMD ["docker-cmd.sh"]
