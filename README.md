@@ -223,7 +223,7 @@ bind-mounted to disk: it's purely in-container coordination state, wiped
 clean on every container start, so there's nothing stale left behind by a
 hard crash or `docker compose kill` to clean up. Actual commands are run
 against the already-running container with `docker compose exec`, through
-three small commands installed in the image (plain `docker compose exec`
+four small commands installed in the image (plain `docker compose exec`
 defaults to root, since the image has no static user baked in — each of
 these drops to the same `PUID`/`PGID`-mapped user as the main process
 before running anything):
@@ -240,6 +240,9 @@ docker compose exec web2mp3 cookie
 
 # check index status (how many tracks processed vs. still pending)
 docker compose exec web2mp3 inspect
+
+# work the pending queue in the foreground, printing what it's doing
+docker compose exec web2mp3 daemon --verbose --continuous
 ```
 
 `inspect` (also works via plain `docker exec <container-name> inspect` if
@@ -498,12 +501,32 @@ References:
 - Repeated HTTP 429 discussion (Spotipy): https://stackoverflow.com/questions/78411698/spotify-api-repeated-http-429-error-using-spotipy
 - 180 calls/minute statement (example call limiting writeup): https://medium.com/mendix/limiting-your-amount-of-calls-in-mendix-most-of-the-time-rest-835dde55b10e
 
-DAEMONs can then be initiated manually by running `python download_daemon.py`
-(inside the container: `docker compose exec web2mp3 setpriv --reuid "$PUID" --regid "$PGID" --clear-groups python src/download_daemon.py --verbose`
-— the same privilege-drop `dl`/`cookie`/`inspect` do internally, spelled
-out manually since this isn't one of them).
-You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run download_daemon.py in verbose mode and do not want all tasks in the SDB
+DAEMONs can then be initiated manually with the `daemon` command, which is
+just `python src/download_daemon.py` behind the same privilege drop
+`dl`/`cookie`/`inspect` use, and takes all the same flags:
+
+```
+# process one pending item in the foreground, then exit
+docker compose exec web2mp3 daemon --verbose
+
+# keep going through the queue, no sleep between tracks
+docker compose exec web2mp3 daemon --verbose --continuous -t 0
+
+# spawn 4 headless background DAEMONs, as `dl` does by default
+docker compose exec web2mp3 daemon
+```
+
+You might want to choose this for the same reason as 2) but you also have multiple URLs, or if you want to manually want to run the daemon in verbose mode and do not want all tasks in the SDB
 to be processed straight away.
+
+To queue matches up without immediately handing them to background DAEMONs
+(so a verbose daemon has work waiting for it, and nothing races it for the
+per-task locks), match with `-i not` first:
+
+```
+docker compose exec web2mp3 dl --headless -i not <url>
+docker compose exec web2mp3 daemon --verbose --continuous
+```
 
 * `max_daemons`: number of DAEMONS to spawn when download_daemon.py is called.
 Default is `4`. A higher number is faster but requires more computational power.
@@ -520,14 +543,14 @@ are being processed. Therefor, there is the option to run in verbose mode:
     2. `True`   
     Initiate a single process and print the logging data to the console.
 
-* `verbose_single` Whether to only perform a single item when in verbose 
-  mode as Boolean
-      1. `True` (default) 
+* `verbose_continuous` (`-c`, also spelled `--continuous`) Whether to keep
+  processing items when in verbose mode, as Boolean
+      1. `False` (default) 
          Only process a single item, then return. If your sole intent is to check 
          if the downloading process succeeds or fails, this is your best 
          option. Afterwards you can continue debugging or running downloads 
          without verbose mode.
-      2. `False`
+      2. `True`
          Keep processing items. If you like looking at every one of your 
          downloads being processed this is your option. This might be useful when downloads only break every so often and you do no not want to find out later in the logs.
 
@@ -538,7 +561,17 @@ Downloading age restricted content from YouTube requires a `www.youtube.com_cook
 
 Run `docker compose exec web2mp3 cookie` at any time to check
 whether a cookie file is currently configured and looks valid — if not, it
-prints the same setup steps below directly to the console.
+prints the same setup steps below directly to the console. It matches cookie
+names exactly, so a signed-out export is reported as such rather than passing
+on a near-miss like `__Secure-1PSIDTS`.
+
+If downloads start failing with "Sign in to confirm your age" even though a
+cookie file is in place, run `cookie` first: the usual cause is that the
+YouTube session behind the export has since been invalidated (logging out of
+that Google account in the browser also kills the exported cookies), and the
+fix is a fresh export. Note that web2mp3 hands yt-dlp a throwaway copy of the
+file rather than the file itself, so a failed download can't overwrite your
+export and the DAEMONs can't race each other writing it.
 
 [Instructions on how to get this file can be found here](https://github.com/ytdl-org/youtube-dl#how-do-i-pass-cookies-to-youtube-dl). 1. Install extension "Get cookies.txt LOCALLY", 2. Go to YouTube, 3. Open the extension, 4. Export your cookies, 
 

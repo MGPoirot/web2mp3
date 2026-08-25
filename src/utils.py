@@ -434,7 +434,7 @@ def _parse_retry_after_seconds(headers) -> int | None:
 def call_with_backoff(
     func,
     *args,
-    logger: logging.Logger | None = None,
+    backoff_logger: logging.Logger | None = None,
     max_retries: int = 10,
     base_sleep_s: float = 2.0,
     max_sleep_s: float = 60.0,
@@ -448,12 +448,16 @@ def call_with_backoff(
     - Retries on HTTP 429 when the caller raises `requests.exceptions.HTTPError`
       with a populated `response` (so we can read Retry-After).
 
+    `backoff_logger` is only for retry/throttle notices. Do not pass the
+    wrapped function's `logger=` here — that belongs in *args / **kwargs so
+    the callee actually receives it.
+
     Returns the function result.
 
     IMPORTANT: If retries are exhausted, this raises RuntimeError.
     """
 
-    logger = logger or logging.getLogger(__name__)
+    logger = backoff_logger or logging.getLogger(__name__)
 
     def _notify(message: str) -> None:
         """Surface throttling/timeout waits to the user.
@@ -539,7 +543,7 @@ def general_timeout_handler(func, *args, **kwargs):
     return call_with_backoff(
         func,
         *args,
-        logger=logger,
+        backoff_logger=logger,
         max_retries=max_time_outs,
         **kwargs,
     )

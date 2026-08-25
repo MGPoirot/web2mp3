@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import sys
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
@@ -49,15 +51,34 @@ def configure_logger(
             return getattr(h, "baseFilename", None) == str(log_file)
 
         if not _has_handler(RotatingFileHandler, same_file):
-            fh = RotatingFileHandler(
-                str(log_file),
-                maxBytes=max_bytes,
-                backupCount=backup_count,
-                encoding="utf-8",
+            # Daemon logs are named after a pid, so they collide with whatever
+            # is already on disk under that number -- including files left by
+            # an earlier run under a different uid, which this process then
+            # cannot append to. Losing a log is not worth losing the download,
+            # so fall back to a fresh name and only then give up.
+            fallback = log_file.with_name(
+                f"{log_file.stem}-{int(time.time() * 1000)}{log_file.suffix}"
             )
-            fh.setLevel(level)
-            fh.setFormatter(formatter)
-            logger.addHandler(fh)
+            fh = None
+            for candidate in (log_file, fallback):
+                try:
+                    fh = RotatingFileHandler(
+                        str(candidate),
+                        maxBytes=max_bytes,
+                        backupCount=backup_count,
+                        encoding="utf-8",
+                    )
+                    break
+                except OSError as e:
+                    print(f'[web2mp3] Could not open log file "{candidate}": {e}',
+                          file=sys.stderr)
+
+            if fh is not None:
+                fh.setLevel(level)
+                fh.setFormatter(formatter)
+                logger.addHandler(fh)
+            else:
+                print('[web2mp3] Continuing without a log file.', file=sys.stderr)
 
     return logger
 

@@ -6,10 +6,14 @@ import time
 from utils import get_url_platform, get_path_components, track_exists, clip_path_length, call_with_backoff
 import os
 import index
+from download_errors import classify_download_error
 from tag_manager import download_cover_img, set_file_tags
 import atexit
 import sys
 import click
+
+PERMANENT_FAIL_LIMIT = 3
+STALE_LOCK_TTL_SECONDS = 30 * 60
 
 
 class LockFile:
@@ -53,7 +57,37 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
     conclusion = "failed."
     logger.info('Started download_track for "%s"', track_uri)
 
-    # Retrieve and extract song properties from the index
+    try:
+        conclusion = _download_track_body(track_uri, logger)
+    except Exception as e:
+        kind, reason = classify_download_error(e)
+        logger.error("download_track %s failure (%s): %s", kind, reason, e)
+        if kind == "permanent":
+            count = index.record_permanent_failure(track_uri)
+            if count >= PERMANENT_FAIL_LIMIT:
+                index.blacklist_uri(track_uri, reason, str(e), fail_count=count)
+                logger.info(
+                    "Blacklisted %s after %d permanent failures: %s",
+                    track_uri,
+                    count,
+                    reason,
+                )
+                conclusion = "failed permanently; blacklisted."
+            else:
+                logger.info(
+                    "Permanent failure %d/%d for %s: %s",
+                    count,
+                    PERMANENT_FAIL_LIMIT,
+                    track_uri,
+                    reason,
+                )
+        else:
+            index.record_attempt(track_uri)
+
+    logger.info("download_track %s", conclusion)
+
+
+def _download_track_body(track_uri: str, logger: logging.Logger) -> str:
     download_info = index.read(track_uri)
     if download_info is None:
         logger.warning(
@@ -65,10 +99,8 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
             "resubmit the URL if needed.",
             track_uri,
         )
-        logger.info("download_track %s", conclusion)
-        return
+        return "failed."
 
-    # Unpack kwargs from track tags
     settings = download_info["settings"]
     mp3_tags = download_info["tags"]
 
@@ -77,7 +109,6 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
     ps = settings["print_space"]
     preferred_quality = settings["quality"]
 
-    # Get path components
     artist_p, album_p, track_p = get_path_components(mp3_tags)
 
     file_exists = False
@@ -85,7 +116,6 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
         logger.info("Skipped: FileExists")
         file_exists = True
     else:
-        # Define paths
         album_dir = clip_path_length(music_dir / artist_p / album_p)
         tr_prefix = None if mp3_tags.get("track_num") is None else f'{mp3_tags["track_num"]} - '
         mp3_fname = album_dir / f"{tr_prefix}{track_p}.mp3"
@@ -97,27 +127,23 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
         cov_fname = album_dir / "folder.jpg"
         cov_exists = cov_fname.is_file()
 
-        # Log storage locations
         logger.info('%s "%s"', "Album dir".ljust(ps), album_dir)
         logger.info('%s "%s"', "MP3 Audio filename".ljust(ps), mp3_fname)
         logger.info('%s "%s"', "Artist filename   ".ljust(ps), art_fname)
         logger.info('%s "%s"', "Cover filename    ".ljust(ps), cov_fname)
 
-        # Download artist image (if available)
         if "artist_image" not in mp3_tags:
             logger.warning("KeyError: Artist Image URL was not set at all")
             artist_url = None
         else:
             artist_url = mp3_tags.pop("artist_image")
 
-        # Download cover (if available)
         if "cover" not in mp3_tags:
             logger.warning("KeyError: Cover URL was not set at all")
             cover_url = None
         else:
             cover_url = mp3_tags.pop("cover")
 
-        # Download artist image
         if artist_url is None:
             logger.warning("ValueError: No artist image URL set.")
         elif art_exists and not do_overwrite:
@@ -130,10 +156,10 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
                 art_fname,
                 artist_url,
                 logger=logger,
+                backoff_logger=logger,
                 print_space=ps,
             )
-        
-        # Download cover image
+
         if cover_url is None:
             logger.warning("ValueError: No cover URL set.")
         elif cov_exists and not do_overwrite:
@@ -141,35 +167,31 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
         else:
             if cov_exists:
                 logger.info('%s "%s"', "File Overwritten:".ljust(ps), cov_fname)
-            # Cover downloads can also be throttled (HTTP 429). Respect Retry-After when present.
             call_with_backoff(
                 download_cover_img,
                 cov_fname,
                 cover_url,
                 logger=logger,
+                backoff_logger=logger,
                 print_space=ps,
             )
 
-        # Specify downloading method
         download_method = get_url_platform(track_uri)
         track_url = download_method.uri2url(track_uri)
 
-        # Check if file already exists and if it should be overwritten
         if do_overwrite and os.path.isfile(mp3_fname):
             logger.info('%s "%s"', "File Overwritten:".ljust(ps), mp3_fname)
             os.remove(mp3_fname)
 
-        # Download audio
-        # yt-dlp / HTTP calls may occasionally hit throttles too.
         call_with_backoff(
             download_method.audio_download,
             track_url,
             mp3_fname,
             preferred_quality,
             logger=logger,
+            backoff_logger=logger,
         )
 
-        # Set file tags
         if os.path.isfile(mp3_fname):
             file_exists = True
             set_file_tags(
@@ -179,19 +201,29 @@ def download_track(track_uri: str, logger: logging.Logger | None = None) -> None
                 logger=logger,
             )
 
-    # Conclude
     if file_exists:
         index.write(track_uri, overwrite=True)
         logger.info("Index item cleared to None.")
-        conclusion = "finished successfully."
-    logger.info("download_track %s", conclusion)
+        return "finished successfully."
+
+    index.record_attempt(track_uri)
+    logger.error("download produced no mp3 without an exception")
+    return "failed."
 
 
-def syscall(verbose: bool = False, sleep_seconds: int = 10) -> subprocess.Popen:
+def syscall(
+    verbose: bool = False,
+    sleep_seconds: int = 10,
+    verbose_continuous: bool = False,
+) -> subprocess.Popen:
     """Spawn a daemon process.
 
     Uses subprocess (no shell), so it's cross-platform and doesn't depend on '&' or pythonw.
     Keeps prior behavior: non-verbose spawns a headless background process.
+
+    Verbose is the opposite case: the child inherits this process's stdout/stderr
+    and stays in the same session, so the point of asking for verbose -- seeing
+    the download happen -- actually holds.
     """
     args = [
         sys.executable,
@@ -201,20 +233,27 @@ def syscall(verbose: bool = False, sleep_seconds: int = 10) -> subprocess.Popen:
     ]
     if verbose:
         args.append("--verbose")
+    if verbose_continuous:
+        args.append("--verbose_continuous")
 
     return subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=(os.name != "nt"),
-        # Detach on Windows only when not verbose (verbose should stay interactive).
+        stdout=None if verbose else subprocess.DEVNULL,
+        stderr=None if verbose else subprocess.DEVNULL,
+        # Detaching a verbose daemon would orphan the output we just asked it for.
+        start_new_session=(os.name != "nt" and not verbose),
         creationflags=(0x00000008 | 0x00000200) if os.name == "nt" and not verbose else 0,
         close_fds=True,
     )
 
 
-def start_daemons(max_daemons: int = 4, verbose: bool = False, sleep_seconds: int = 10) -> int:
+def start_daemons(
+    max_daemons: int = 4,
+    verbose: bool = False,
+    sleep_seconds: int = 10,
+    verbose_continuous: bool = False,
+) -> int:
     """
     .. py:function:: start_daemons(max_daemons=4, verbose=False)
 
@@ -226,12 +265,24 @@ def start_daemons(max_daemons: int = 4, verbose: bool = False, sleep_seconds: in
     :param int max_daemons: The number up until new daemons will be started.
     :param bool verbose: Whether to run the daemon process in the foreground
     :param int sleep_seconds: Seconds to sleep between downloads (per daemon)
+    :param bool verbose_continuous: When verbose, keep going after 1 item
 
     :return: Number of daemon processes started
     :rtype: int
     """
     if verbose:
-        syscall(verbose=True, sleep_seconds=sleep_seconds)
+        proc = syscall(
+            verbose=True,
+            sleep_seconds=sleep_seconds,
+            verbose_continuous=verbose_continuous,
+        )
+        # Foreground means foreground: block, or the caller races the child for
+        # the terminal (and for stdin, if it goes on to prompt for more URLs).
+        try:
+            proc.wait()
+        except KeyboardInterrupt:
+            proc.terminate()
+            proc.wait()
         return 1
 
     n_started = 0
@@ -259,8 +310,49 @@ def uri2tmp(n, uri: str | Path) -> str:
     return daemon_dir.format(f"{n}_{str(uri)}")
 
 
+def sweep_stale_locks(ttl_seconds: int = STALE_LOCK_TTL_SECONDS) -> int:
+    """Remove daemon/task markers whose pid is dead or whose mtime is too old."""
+    removed = 0
+    now = time.time()
+    for path in glob(daemon_dir.format("*")):
+        stale = False
+        pid = None
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+            if text.isdigit():
+                pid = int(text)
+        except (OSError, ValueError):
+            pid = None
+
+        if pid is not None:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                stale = True
+            except PermissionError:
+                pass
+            except OSError:
+                stale = True
+
+        if not stale:
+            try:
+                if (now - path.stat().st_mtime) > ttl_seconds:
+                    stale = True
+            except FileNotFoundError:
+                continue
+
+        if stale:
+            try:
+                path.unlink()
+                removed += 1
+            except FileNotFoundError:
+                pass
+    return removed
+
+
 def get_tasks() -> list:
     """Return list of unprocessed URIs that are not currently busy (no tmp marker present)."""
+    sweep_stale_locks()
     uris = index.to_do()
     uris = [u for u in uris if not any(glob(uri2tmp("*", u)))]  # busy
     return uris
@@ -270,7 +362,15 @@ def get_tasks() -> list:
 @click.version_option()
 @click.option("-x", "--max_daemons", default=4, help="Number of DAEMONs to spawn as integer")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Whether to download in foreground as bool")
-@click.option("-c", "--verbose_continuous", is_flag=True, default=False, help="When verbose, whether to continue after 1 item")
+@click.option(
+    "-c",
+    "--verbose_continuous",
+    "--continuous",
+    "verbose_continuous",
+    is_flag=True,
+    default=False,
+    help="When verbose, whether to continue after 1 item",
+)
 @click.option(
     "-t",
     "--sleep_seconds",
@@ -287,6 +387,8 @@ def daemon_job(max_daemons: int = 4, verbose: bool = False, verbose_continuous: 
         log_file=log_dir.format(f"daemon-{os.getpid()}", "log"),
         console=bool(verbose),
     )
+
+    sweep_stale_locks()
 
     # List daemons that are not running
     daemon_ns = [i for i in range(max_daemons) if not daemon_dir.format(i).is_file()]

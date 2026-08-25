@@ -505,6 +505,7 @@ def main(**kwargs):
     headless = kwargs['headless']
     max_daemons = kwargs['max_daemons']
     verbose = kwargs['verbose']
+    verbose_continuous = kwargs.get('verbose_continuous', False)
     sync = kwargs.get('sync', False)
 
     # Unpack URLs that contain playlists or albums
@@ -531,12 +532,14 @@ def main(**kwargs):
                     close_logger_handlers(dl_logger)
         # Start the daemons during the matching of further items
         elif input_is('During', init_daemons):
-            n_started = start_daemons(max_daemons, verbose)
+            n_started = start_daemons(max_daemons, verbose,
+                                      verbose_continuous=verbose_continuous)
             if n_started and not verbose:
                 print(f'{n_started} DAEMONs started')
     # Start the daemons after the matching of all items
     if not sync and input_is('After', init_daemons):
-        n_started = start_daemons(max_daemons, verbose)
+        n_started = start_daemons(max_daemons, verbose,
+                                  verbose_continuous=verbose_continuous)
         if n_started and not verbose:
             print(f'{n_started} DAEMONs started')
 
@@ -577,7 +580,8 @@ def main(**kwargs):
               help="When to initiate DAEMONs.")
 @click.option("-v", "--verbose", is_flag=True, default=False,
               help="To download in foreground.")
-@click.option("-c", "--verbose_continuous", is_flag=True, default=False,
+@click.option("-c", "--verbose_continuous", "--continuous", "verbose_continuous",
+              is_flag=True, default=False,
               help="When verbose, to continue after 1 item.")
 @click.option("-t", "--tolerance", default=0.10,
               help="Duration difference threshold.")

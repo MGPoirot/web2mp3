@@ -5,5 +5,11 @@
 # no static USER (it's remapped to PUID/PGID at container start instead) —
 # drop to that same unprivileged, correctly-owned user before running.
 #
-# Usage: docker compose exec web2mp3 inspect
-exec setpriv --reuid "${PUID:-1000}" --regid "${PGID:-1000}" --clear-groups python src/index.py --summary "$@"
+# Usage:
+#   docker compose exec web2mp3 inspect
+#   docker compose exec web2mp3 inspect --pending
+#   docker compose exec web2mp3 inspect --blacklist
+if [ "$#" -eq 0 ]; then
+  exec setpriv --reuid "${PUID:-1000}" --regid "${PGID:-1000}" --clear-groups python src/index.py --summary
+fi
+exec setpriv --reuid "${PUID:-1000}" --regid "${PGID:-1000}" --clear-groups python src/index.py "$@"

@@ -25,6 +25,13 @@ chown "$PUID:$PGID" .daemons
 # holds a small sqlite db and small per-submission transcripts.
 chown -R "$PUID:$PGID" .gui
 
+# .logs is a bind mount that predates the PUID/PGID remapping, so it can still
+# hold files written as root by an earlier install. Daemon logs are named
+# daemon-<pid>.log, so a stale root-owned one is a live landmine: sooner or
+# later a daemon gets that pid, cannot open its own log, and dies on startup.
+# Small text files, so -R is cheap here.
+chown -R "$PUID:$PGID" .logs
+
 # setpriv changes uid/gid but not $HOME -- left as root's "/root", tools
 # like yt-dlp resolve their cache dir off $HOME and would try (and fail) to
 # write to /root/.cache once running as the unprivileged user. Point HOME

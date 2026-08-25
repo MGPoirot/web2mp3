@@ -1,6 +1,8 @@
 from initialize import cookie_file, deno_bin, ytdlp_remote_components
 import logging
 import os
+import shutil
+import tempfile
 import yt_dlp
 import json
 import random
@@ -304,10 +306,21 @@ def audio_download(youtube_url: str, audio_fname: str | Path, quality:int, logge
     else:
         logger.warning("DENO_BIN not configured/found; YouTube signature solving may fail")
     
+    ydl_opts['logger'] = logger
+
+    # yt-dlp rewrites its cookiefile on close with whatever the server last
+    # sent back. Pointed at the user's export that is destructive twice over:
+    # a signed-out response silently overwrites the login cookies, and the
+    # DAEMONs run several downloads at once against the same path. Hand each
+    # run a throwaway copy so the export stays exactly as it was exported.
+    scratch_cookies = None
     if cookie_file:
         if os.path.isfile(cookie_file):
-            print('Cookie file found:', cookie_file)
-            ydl_opts.update({'cookiefile': str(cookie_file)})
+            logger.info('Cookie file found: %s', cookie_file)
+            fd, scratch_cookies = tempfile.mkstemp(prefix='web2mp3-cookies-', suffix='.txt')
+            os.close(fd)
+            shutil.copyfile(cookie_file, scratch_cookies)
+            ydl_opts.update({'cookiefile': scratch_cookies})
         else:
             logger.warning('Provided cookiefile does not exist. Ignored.')
     # Attempt download
@@ -320,6 +333,13 @@ def audio_download(youtube_url: str, audio_fname: str | Path, quality:int, logge
         if not cookie_file:
             logger.warning('Warning: No COOKIE_FILE was found. Without COOKIE_FILE '
                    'file restricted download will fail.')
+        raise
+    finally:
+        if scratch_cookies:
+            try:
+                os.unlink(scratch_cookies)
+            except OSError:
+                pass
 
 
 def search(search_query, **kwargs) -> List[dict]:

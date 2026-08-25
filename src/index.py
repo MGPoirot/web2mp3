@@ -1,6 +1,6 @@
 from initialize import index_path, Path
 from utils import input_is
-from typing import List
+from typing import List, Optional, Tuple
 import json
 import sqlite3
 import sys
@@ -9,6 +9,38 @@ import time
 DB_PATH = index_path / "index.sqlite3"
 
 _conn: sqlite3.Connection | None = None
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS entries (
+            uri        TEXT PRIMARY KEY,
+            status     TEXT NOT NULL CHECK (status IN ('pending', 'done')),
+            payload    TEXT,
+            updated_at REAL NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status)")
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(entries)")}
+    if "last_attempt_at" not in cols:
+        conn.execute("ALTER TABLE entries ADD COLUMN last_attempt_at REAL")
+    if "perm_fail_count" not in cols:
+        conn.execute(
+            "ALTER TABLE entries ADD COLUMN perm_fail_count INTEGER NOT NULL DEFAULT 0"
+        )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS blacklist (
+            uri        TEXT PRIMARY KEY,
+            reason     TEXT,
+            error      TEXT,
+            fail_count INTEGER NOT NULL DEFAULT 0,
+            updated_at REAL NOT NULL
+        )
+        """
+    )
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -24,19 +56,17 @@ def _get_conn() -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA busy_timeout=5000")
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS entries (
-                uri        TEXT PRIMARY KEY,
-                status     TEXT NOT NULL CHECK (status IN ('pending', 'done')),
-                payload    TEXT,
-                updated_at REAL NOT NULL
-            )
-            """
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status)")
+        _ensure_schema(conn)
         _conn = conn
     return _conn
+
+
+def reset_conn_for_tests() -> None:
+    """Close the module connection so tests can point DB_PATH at a temp file."""
+    global _conn
+    if _conn is not None:
+        _conn.close()
+        _conn = None
 
 
 def has_uri(uri: str | Path) -> bool:
@@ -68,11 +98,15 @@ def read(uri: str | Path) -> dict | None:
 
 def to_do() -> List[str]:
     """
-    Retrieves a list of pending URIs from the index.
-
-    :return:    A list of URI strings with a pending entry.
+    Retrieves pending URIs, never-tried first, then least-recently attempted.
     """
-    rows = _get_conn().execute("SELECT uri FROM entries WHERE status = 'pending'").fetchall()
+    rows = _get_conn().execute(
+        """
+        SELECT uri FROM entries
+        WHERE status = 'pending'
+        ORDER BY last_attempt_at IS NOT NULL, last_attempt_at, updated_at
+        """
+    ).fetchall()
     return [r[0] for r in rows]
 
 
@@ -96,20 +130,117 @@ def write(
         return
     payload = {'tags': tags, 'settings': settings}
     conn = _get_conn()
+    now = time.time()
     if any(payload.values()):
         conn.execute(
-            "INSERT INTO entries (uri, status, payload, updated_at) VALUES (?, 'pending', ?, ?) "
+            "INSERT INTO entries (uri, status, payload, updated_at, last_attempt_at, perm_fail_count) "
+            "VALUES (?, 'pending', ?, ?, NULL, 0) "
             "ON CONFLICT(uri) DO UPDATE SET status='pending', payload=excluded.payload, "
-            "updated_at=excluded.updated_at",
-            (str(uri), json.dumps(payload), time.time()),
+            "updated_at=excluded.updated_at, last_attempt_at=NULL, perm_fail_count=0",
+            (str(uri), json.dumps(payload), now),
         )
     else:
         conn.execute(
             "INSERT INTO entries (uri, status, payload, updated_at) VALUES (?, 'done', NULL, ?) "
             "ON CONFLICT(uri) DO UPDATE SET status='done', payload=NULL, "
             "updated_at=excluded.updated_at",
-            (str(uri), time.time()),
+            (str(uri), now),
         )
+
+
+def record_attempt(uri: str | Path) -> None:
+    """Bump last_attempt_at so this pending URI rotates behind never-tried ones."""
+    _get_conn().execute(
+        "UPDATE entries SET last_attempt_at = ? WHERE uri = ? AND status = 'pending'",
+        (time.time(), str(uri)),
+    )
+
+
+def record_permanent_failure(uri: str | Path) -> int:
+    """Increment perm_fail_count and last_attempt_at. Returns the new count (0 if no row)."""
+    conn = _get_conn()
+    now = time.time()
+    conn.execute(
+        "UPDATE entries SET last_attempt_at = ?, perm_fail_count = perm_fail_count + 1 "
+        "WHERE uri = ? AND status = 'pending'",
+        (now, str(uri)),
+    )
+    row = conn.execute(
+        "SELECT perm_fail_count FROM entries WHERE uri = ?", (str(uri),)
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def blacklist_uri(uri: str | Path, reason: str, error: str, fail_count: Optional[int] = None) -> None:
+    """Record a permanent download failure and mark the entry done."""
+    conn = _get_conn()
+    key = str(uri)
+    if fail_count is None:
+        row = conn.execute(
+            "SELECT perm_fail_count FROM entries WHERE uri = ?", (key,)
+        ).fetchone()
+        fail_count = int(row[0]) if row else 1
+    now = time.time()
+    conn.execute(
+        "INSERT INTO blacklist (uri, reason, error, fail_count, updated_at) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(uri) DO UPDATE SET reason=excluded.reason, error=excluded.error, "
+        "fail_count=excluded.fail_count, updated_at=excluded.updated_at",
+        (key, reason, error, fail_count, now),
+    )
+    write(key)
+
+
+def is_blacklisted(uri: str | Path) -> bool:
+    row = _get_conn().execute(
+        "SELECT 1 FROM blacklist WHERE uri = ?", (str(uri),)
+    ).fetchone()
+    return row is not None
+
+
+def blacklist_count() -> int:
+    return _get_conn().execute("SELECT COUNT(*) FROM blacklist").fetchone()[0]
+
+
+def list_pending() -> List[Tuple[str, Optional[float]]]:
+    rows = _get_conn().execute(
+        """
+        SELECT uri, last_attempt_at FROM entries
+        WHERE status = 'pending'
+        ORDER BY last_attempt_at IS NOT NULL, last_attempt_at, updated_at
+        """
+    ).fetchall()
+    return [(r[0], r[1]) for r in rows]
+
+
+def list_blacklist() -> List[Tuple[str, str, str, int, float]]:
+    rows = _get_conn().execute(
+        "SELECT uri, reason, error, fail_count, updated_at FROM blacklist ORDER BY updated_at"
+    ).fetchall()
+    return [(r[0], r[1] or "", r[2] or "", int(r[3]), float(r[4])) for r in rows]
+
+
+def _fmt_attempt(ts: Optional[float]) -> str:
+    if ts is None:
+        return "never"
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
+
+
+def print_pending() -> None:
+    rows = list_pending()
+    print(f"PENDING ({len(rows)}):")
+    for uri, last_attempt in rows:
+        print(f"  {uri}\tlast_attempt={_fmt_attempt(last_attempt)}")
+
+
+def print_blacklist() -> None:
+    rows = list_blacklist()
+    print(f"BLACKLIST ({len(rows)}):")
+    for uri, reason, error, fail_count, _updated in rows:
+        err = error.replace("\n", " ")
+        if len(err) > 160:
+            err = err[:157] + "..."
+        print(f"  {uri}\treason={reason}\tfails={fail_count}\t{err}")
 
 
 def summary() -> int:
@@ -125,10 +256,12 @@ def summary() -> int:
     uris_to_do = to_do()
     n_to_do = len(uris_to_do)
     n_empty_records = n_records - n_to_do
+    n_blacklisted = blacklist_count()
 
     info = [
         ('number of processed records', n_empty_records),
         ('number of unprocessed records', n_to_do),
+        ('number of blacklisted records', n_blacklisted),
         ('location', DB_PATH),
     ]
 
@@ -187,4 +320,12 @@ def debug() -> None:
 
 
 if __name__ == '__main__':
-    summary() if '--summary' in sys.argv else debug()
+    args = sys.argv[1:]
+    if '--pending' in args:
+        print_pending()
+    elif '--blacklist' in args:
+        print_blacklist()
+    elif '--summary' in args:
+        summary()
+    else:
+        debug()
