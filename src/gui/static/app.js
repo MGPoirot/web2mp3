@@ -14,6 +14,8 @@ const cookiesCancel = document.getElementById('cookies-cancel');
 
 let currentId = null;
 let currentSocket = null;
+let cookiesOk = null;
+let cookiesStatusMessage = '';
 
 function statusLabel(status) {
   return status.replace('_', ' ');
@@ -160,11 +162,13 @@ async function refreshCookies() {
   const res = await fetch('/api/cookies');
   if (!res.ok) return;
   const data = await res.json();
-  setCookiesState(!!data.ok);
+  cookiesOk = !!data.ok;
+  cookiesStatusMessage = data.message || '';
+  setCookiesState(cookiesOk);
 }
 
 cookiesBtn.addEventListener('click', () => {
-  cookiesMessage.textContent = '';
+  cookiesMessage.textContent = cookiesOk ? '' : cookiesStatusMessage;
   cookiesFile.value = '';
   cookiesDialog.showModal();
 });

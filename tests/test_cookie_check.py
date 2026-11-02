@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import cookie_check
-from cookie_check import assess_content
+from cookie_check import assess_content, classify_probe, _rotation_message
 
 
 def _row(name: str, value: str = "value") -> str:
@@ -55,6 +55,19 @@ class AssessContentTests(unittest.TestCase):
     def test_httponly_prefix(self):
         status = assess_content(HTTPONLY)
         self.assertTrue(status.ok)
+
+    def test_rotated_when_youtube_clears_auth(self):
+        self.assertEqual(classify_probe(True, False, True), 'rotated')
+        self.assertEqual(classify_probe(True, False, False), 'rotated')
+
+    def test_not_rotated_when_session_survives(self):
+        self.assertEqual(classify_probe(True, True, False), 'ok')
+
+    def test_rotation_message_explains_age_gate(self):
+        message = _rotation_message('/tmp/cookies.txt')
+        self.assertIn('rotated', message)
+        self.assertIn('Sign in to confirm your age', message)
+        self.assertNotIn('looks valid', message)
 
 
 class UploadApiTests(unittest.TestCase):

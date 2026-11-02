@@ -107,7 +107,7 @@ async def upload_cookies(file: UploadFile = File(...)) -> JSONResponse:
             status_code=400,
         )
     content = raw.decode("utf-8", errors="replace")
-    status = cookie_check.assess_content(content)
+    status = cookie_check.assess_upload(content)
     if not status.ok:
         return JSONResponse(
             {"ok": False, "message": status.message},
