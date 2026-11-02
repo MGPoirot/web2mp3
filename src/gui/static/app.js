@@ -88,7 +88,7 @@ function connectSocket(id) {
     } else if (message.type === 'status') {
       updateSidebarStatus(id, message.status);
       showAnswerRow(message.status === 'needs_input');
-      if (message.status === 'done' || message.status === 'failed') {
+      if (message.status === 'done' || message.status === 'failed' || message.status === 'throttled') {
         closeSocket();
       }
     }

@@ -37,6 +37,22 @@ import sessions  # noqa: E402
 
 IDLE_THRESHOLD = 0.4  # seconds of silence while alive => probably waiting for input
 WIZARD_PROMPT_SENTINEL = '>>> URL or [Abort]?'
+TERMINAL_STATUSES = ('done', 'failed', 'throttled')
+
+
+def exit_status(rc: int, transcript: str) -> str:
+    """Sidebar status for a finished submission.
+
+    Spotipy gives up with "Max Retries, reason: too many 429 error responses"
+    after Spotify rate-limits an album/track listing. That is throttling, not
+    a bad URL, so the sidebar says THROTTLED instead of FAILED.
+    """
+    if rc == 0:
+        return 'done'
+    lowered = transcript.lower()
+    if 'max retries' in lowered and 'too many 429' in lowered:
+        return 'throttled'
+    return 'failed'
 
 _active: dict[str, "_Submission"] = {}
 _active_lock = threading.Lock()
@@ -130,7 +146,7 @@ def _reader_thread(sub: _Submission) -> None:
             sub.set_status('running')
 
     rc = sub.proc.wait()
-    sub.set_status('done' if rc == 0 else 'failed')
+    sub.set_status(exit_status(rc, sessions.read_transcript(sub.sid)))
     try:
         os.close(fd)
     except OSError:

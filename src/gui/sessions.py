@@ -29,24 +29,61 @@ DB_PATH = GUI_DIR / 'sessions.sqlite3'
 GUI_DIR.mkdir(exist_ok=True)
 TRANSCRIPTS_DIR.mkdir(exist_ok=True)
 
+_STATUSES = "('running', 'needs_input', 'done', 'failed', 'throttled')"
+
+
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS submissions (
+            id         TEXT PRIMARY KEY,
+            url        TEXT NOT NULL,
+            status     TEXT NOT NULL CHECK (status IN {_STATUSES}),
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )
+        """
+    )
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='submissions'"
+    ).fetchone()
+    if row and row[0] and "throttled" in row[0]:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_submissions_created ON submissions(created_at)")
+        return
+    # Existing databases were created with a CHECK list that has no
+    # 'throttled'. SQLite cannot alter a CHECK in place, so rebuild the table.
+    conn.execute("BEGIN")
+    try:
+        conn.execute(
+            f"""
+            CREATE TABLE submissions_new (
+                id         TEXT PRIMARY KEY,
+                url        TEXT NOT NULL,
+                status     TEXT NOT NULL CHECK (status IN {_STATUSES}),
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO submissions_new (id, url, status, created_at, updated_at) "
+            "SELECT id, url, status, created_at, updated_at FROM submissions"
+        )
+        conn.execute("DROP TABLE submissions")
+        conn.execute("ALTER TABLE submissions_new RENAME TO submissions")
+        conn.execute("CREATE INDEX idx_submissions_created ON submissions(created_at)")
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
 
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH), timeout=5, isolation_level=None)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=5000")
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS submissions (
-            id         TEXT PRIMARY KEY,
-            url        TEXT NOT NULL,
-            status     TEXT NOT NULL CHECK (status IN ('running', 'needs_input', 'done', 'failed')),
-            created_at REAL NOT NULL,
-            updated_at REAL NOT NULL
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_submissions_created ON submissions(created_at)")
+    _ensure_schema(conn)
     return conn
 
 

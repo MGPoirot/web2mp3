@@ -162,6 +162,7 @@ body {
 .status-running, .status-needs_input { color: var(--accent); }
 .status-done { color: #22c55e; }
 .status-failed { color: #ef4444; }
+.status-throttled { color: #f59e0b; }
 
 main {
   flex: 1;

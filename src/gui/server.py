@@ -173,7 +173,7 @@ async def ws_endpoint(websocket: WebSocket, sid: str) -> None:
         while True:
             message = await queue.get()
             await websocket.send_json(message)
-            if message.get("type") == "status" and message.get("status") in ("done", "failed"):
+            if message.get("type") == "status" and message.get("status") in runner.TERMINAL_STATUSES:
                 break
     except WebSocketDisconnect:
         pass
