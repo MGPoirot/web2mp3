@@ -118,3 +118,10 @@ class UploadApiTests(unittest.TestCase):
         self.assertIn("Netscape", body["message"])
         self.assertFalse(self.dest.exists())
         self.assertFalse(list(Path(self.tmp.name).glob("**/*cookies.txt")))
+
+    def test_save_replaces_file_that_cannot_be_opened_for_write(self):
+        self.dest.write_text("old")
+        self.dest.chmod(0o444)
+        cookie_check.save_cookie_text("replaced\n")
+        self.assertEqual(self.dest.read_text(), "replaced\n")
+        self.assertTrue(os.access(self.dest, os.W_OK))

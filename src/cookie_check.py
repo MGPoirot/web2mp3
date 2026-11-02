@@ -296,10 +296,28 @@ def assess_installed() -> CookieStatus:
 
 
 def save_cookie_text(content: str) -> CookieStatus:
-    """Write content that has already passed assess_content."""
+    """Write content that has already passed assess_content.
+
+    The existing export is often owned by whoever copied it onto the host
+    (mode 644). The GUI user can create files in .config but cannot open that
+    file for writing. Write a sibling and replace it; replacing only needs
+    write permission on the directory.
+    """
     dest = destination_path()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(content, encoding='utf-8')
+    fd, name = tempfile.mkstemp(prefix='.cookies-', suffix='.tmp', dir=dest.parent)
+    os.close(fd)
+    tmp = Path(name)
+    try:
+        tmp.write_text(content, encoding='utf-8')
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, dest)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
     return assess_content(content, path=str(dest))
 
 
