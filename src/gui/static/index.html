@@ -10,6 +10,10 @@
 <div class="layout">
   <aside id="sidebar">
     <h2>Web2MP3</h2>
+    <button type="button" id="cookies-btn" class="cookies-btn cookies-unknown">
+      <span class="cookies-mark" aria-hidden="true">–</span>
+      Cookies
+    </button>
     <div id="history"></div>
   </aside>
 
@@ -27,6 +31,19 @@
     </form>
   </main>
 </div>
+
+<dialog id="cookies-dialog">
+  <form id="cookies-form">
+    <h3>Upload cookies.txt</h3>
+    <p class="cookies-help">Export cookies from youtube.com while logged in (Get cookies.txt LOCALLY). The file must be a Netscape export containing <code>__Secure-1PSID</code> and <code>__Secure-3PSID</code>.</p>
+    <input id="cookies-file" type="file" accept=".txt,text/plain">
+    <pre id="cookies-message" class="cookies-message"></pre>
+    <div class="cookies-actions">
+      <button type="button" id="cookies-cancel" class="cookies-secondary">Cancel</button>
+      <button type="submit" id="cookies-upload">Upload</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="/static/app.js"></script>
 </body>

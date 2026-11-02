@@ -4,6 +4,13 @@ const submitForm = document.getElementById('submit-form');
 const urlInput = document.getElementById('url-input');
 const answerForm = document.getElementById('answer-form');
 const answerInput = document.getElementById('answer-input');
+const cookiesBtn = document.getElementById('cookies-btn');
+const cookiesMark = cookiesBtn.querySelector('.cookies-mark');
+const cookiesDialog = document.getElementById('cookies-dialog');
+const cookiesForm = document.getElementById('cookies-form');
+const cookiesFile = document.getElementById('cookies-file');
+const cookiesMessage = document.getElementById('cookies-message');
+const cookiesCancel = document.getElementById('cookies-cancel');
 
 let currentId = null;
 let currentSocket = null;
@@ -143,4 +150,53 @@ answerForm.addEventListener('submit', (event) => {
   showAnswerRow(false);
 });
 
+function setCookiesState(ok) {
+  cookiesBtn.classList.remove('cookies-unknown', 'cookies-ok', 'cookies-bad');
+  cookiesBtn.classList.add(ok ? 'cookies-ok' : 'cookies-bad');
+  cookiesMark.textContent = ok ? '✓' : '✕';
+}
+
+async function refreshCookies() {
+  const res = await fetch('/api/cookies');
+  if (!res.ok) return;
+  const data = await res.json();
+  setCookiesState(!!data.ok);
+}
+
+cookiesBtn.addEventListener('click', () => {
+  cookiesMessage.textContent = '';
+  cookiesFile.value = '';
+  cookiesDialog.showModal();
+});
+
+cookiesCancel.addEventListener('click', () => {
+  cookiesDialog.close();
+});
+
+cookiesForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const file = cookiesFile.files[0];
+  if (!file) {
+    cookiesMessage.textContent = 'Choose a cookies.txt file first.';
+    return;
+  }
+  const body = new FormData();
+  body.append('file', file);
+  const res = await fetch('/api/cookies', { method: 'POST', body });
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+  if (!res.ok || !data.ok) {
+    cookiesMessage.textContent = data.message || 'Upload failed.';
+    await refreshCookies();
+    return;
+  }
+  cookiesDialog.close();
+  setCookiesState(true);
+});
+
 refreshHistory();
+refreshCookies();

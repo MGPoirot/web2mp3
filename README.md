@@ -372,6 +372,16 @@ credentials (any username, that password) the first time — this applies to
 every request including the live connection, so a wrong password simply
 won't stream anything back.
 
+The sidebar has a Cookies button. A green check means the cookie file the
+container would use passes the same checks as `docker compose exec web2mp3
+cookie` (a Netscape export that includes `__Secure-1PSID` and
+`__Secure-3PSID`). A red cross means no file is present, or the one on disk
+does not. Clicking the button opens an upload dialog; a file that fails
+those checks is rejected with the same explanation, and the current file is
+left in place. A file that passes replaces the one auto-detect already
+loads (or `COOKIE_FILE`, if that is set), so the next download uses it
+without a restart.
+
 If a submission's match is ambiguous, the exact same prompt the CLI would
 show appears as an input box right in the page — answer it the same way
 you would at a terminal (a number to pick a candidate, `Manual`, `Abort`,
