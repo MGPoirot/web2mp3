@@ -385,6 +385,12 @@ same explanation, and the current file is left in place. A file that passes
 replaces the one auto-detect already loads (or `COOKIE_FILE`, if that is
 set), so the next download uses it without a restart.
 
+Submissions that ended `failed` or `throttled` show a circular-arrow retry
+icon, both on their sidebar entry and in the bar above the output when you
+open them. Clicking it submits the same URL again as a new submission; the
+failed one stays in the history. Successful and in-progress submissions have
+no retry icon.
+
 If a submission's match is ambiguous, the exact same prompt the CLI would
 show appears as an input box right in the page — answer it the same way
 you would at a terminal (a number to pick a candidate, `Manual`, `Abort`,
@@ -585,6 +591,15 @@ that Google account in the browser also kills the exported cookies), and the
 fix is a fresh export. Note that web2mp3 hands yt-dlp a throwaway copy of the
 file rather than the file itself, so a failed download can't overwrite your
 export and the DAEMONs can't race each other writing it.
+
+If the log shows `Some web_embedded client https formats have been skipped as
+they are missing a URL ... SABR-only streaming experiment`, that is yt-dlp
+([#12482](https://github.com/yt-dlp/yt-dlp/issues/12482)) warning that YouTube
+is serving your logged-in account SABR-only formats for one client. It is
+harmless on its own: yt-dlp falls back to its other clients. If it does leave
+no usable audio format, web2mp3 retries the download once without cookies
+(logged as `retrying once without cookies`). Age-restricted videos still try
+the cookies first.
 
 [Instructions on how to get this file can be found here](https://github.com/ytdl-org/youtube-dl#how-do-i-pass-cookies-to-youtube-dl). 1. Install extension "Get cookies.txt LOCALLY", 2. Go to YouTube, 3. Open the extension, 4. Export your cookies, 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from download_errors import classify_download_error
+from download_errors import classify_download_error, is_format_unavailable_error
 
 
 class ClassifyDownloadErrorTests(unittest.TestCase):
@@ -62,6 +62,15 @@ class ClassifyDownloadErrorTests(unittest.TestCase):
     def test_retryable_deno_challenge(self):
         kind, _ = classify_download_error("Unable to solve JS challenge using deno")
         self.assertEqual(kind, "retryable")
+
+    def test_format_unavailable_is_retryable_and_detected(self):
+        msg = "ERROR: [youtube] abc: Requested format is not available. Use --list-formats"
+        kind, _ = classify_download_error(msg)
+        self.assertEqual(kind, "retryable")
+        self.assertTrue(is_format_unavailable_error(msg))
+
+    def test_unavailable_video_is_not_format_unavailable(self):
+        self.assertFalse(is_format_unavailable_error("Video unavailable"))
 
     def test_unknown_defaults_to_retryable(self):
         kind, reason = classify_download_error("something completely unexpected")

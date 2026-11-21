@@ -132,6 +132,9 @@ body {
 }
 
 .history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
@@ -229,4 +232,47 @@ button:hover { opacity: 0.9; }
   border-radius: 8px;
   background: var(--bg);
   color: var(--fg);
+}
+
+.history-text { flex: 1; min-width: 0; }
+
+.hidden { display: none !important; }
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+}
+
+.icon-btn:hover { background: var(--border); opacity: 1; color: var(--accent); }
+
+.retry-btn-small { padding: 4px; }
+
+.run-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+.run-bar-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.run-bar .status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }

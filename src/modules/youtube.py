@@ -9,6 +9,7 @@ import random
 import time
 import requests
 from utils import input_is
+from download_errors import is_format_unavailable_error
 from ytmusicapi import YTMusic
 from typing import Tuple, List
 from pathlib import Path
@@ -325,8 +326,21 @@ def audio_download(youtube_url: str, audio_fname: str | Path, quality:int, logge
             logger.warning('Provided cookiefile does not exist. Ignored.')
     # Attempt download
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([youtube_url])
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([youtube_url])
+        except yt_dlp.utils.DownloadError as e:
+            # The "SABR-only streaming experiment" (yt-dlp #12482) is applied
+            # per logged-in account. The warning alone is harmless (yt-dlp
+            # falls back to its other clients), but if it leaves no usable
+            # audio format, an anonymous session is not subject to it.
+            if not (scratch_cookies and is_format_unavailable_error(e)):
+                raise
+            logger.warning('No usable audio format with cookies (%s); '
+                           'retrying once without cookies.', e)
+            anon_opts = {k: v for k, v in ydl_opts.items() if k != 'cookiefile'}
+            with yt_dlp.YoutubeDL(anon_opts) as ydl:
+                ydl.download([youtube_url])
         logger.info('YouTube download successful')
     except BaseException as e:
         logger.error('YouTube download failed: %s', e)

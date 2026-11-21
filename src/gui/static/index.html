@@ -23,6 +23,12 @@
       <button type="submit">Go</button>
     </form>
 
+    <div id="run-bar" class="run-bar hidden">
+      <span id="run-bar-url" class="run-bar-url"></span>
+      <span id="run-bar-status" class="status"></span>
+      <button type="button" id="retry-btn" class="icon-btn" title="Retry" aria-label="Retry"></button>
+    </div>
+
     <div id="output" class="output"></div>
 
     <form id="answer-form" class="answer-row hidden">
@@ -31,6 +37,13 @@
     </form>
   </main>
 </div>
+
+<template id="retry-icon">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <polyline points="23 4 23 10 17 10"></polyline>
+    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+  </svg>
+</template>
 
 <dialog id="cookies-dialog">
   <form id="cookies-form">

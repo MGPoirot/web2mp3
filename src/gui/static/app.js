@@ -11,14 +11,61 @@ const cookiesForm = document.getElementById('cookies-form');
 const cookiesFile = document.getElementById('cookies-file');
 const cookiesMessage = document.getElementById('cookies-message');
 const cookiesCancel = document.getElementById('cookies-cancel');
+const runBar = document.getElementById('run-bar');
+const runBarUrl = document.getElementById('run-bar-url');
+const runBarStatus = document.getElementById('run-bar-status');
+const retryBtn = document.getElementById('retry-btn');
+const retryIcon = document.getElementById('retry-icon');
 
 let currentId = null;
+let currentEntry = null; // {id, url, status} of the submission shown in the content page
 let currentSocket = null;
 let cookiesOk = null;
 let cookiesStatusMessage = '';
 
 function statusLabel(status) {
   return status.replace('_', ' ');
+}
+
+// Failed and throttled runs are the non-successful ones that can be retried.
+function isRetryable(status) {
+  return status === 'failed' || status === 'throttled';
+}
+
+function makeRetryButton() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'icon-btn retry-btn-small';
+  btn.title = 'Retry';
+  btn.setAttribute('aria-label', 'Retry');
+  btn.appendChild(retryIcon.content.cloneNode(true));
+  return btn;
+}
+
+function syncRetryButton(el, url, status) {
+  let btn = el.querySelector('.retry-btn-small');
+  if (isRetryable(status)) {
+    if (!btn) {
+      btn = makeRetryButton();
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        startSubmission(url);
+      });
+      el.appendChild(btn);
+    }
+  } else if (btn) {
+    btn.remove();
+  }
+}
+
+function syncRunBar() {
+  const show = !!currentEntry && isRetryable(currentEntry.status);
+  runBar.classList.toggle('hidden', !currentEntry);
+  if (!currentEntry) return;
+  runBarUrl.textContent = currentEntry.url;
+  runBarStatus.className = 'status status-' + currentEntry.status;
+  runBarStatus.textContent = statusLabel(currentEntry.status);
+  retryBtn.classList.toggle('hidden', !show);
 }
 
 function renderHistory(items) {
@@ -28,6 +75,9 @@ function renderHistory(items) {
     el.className = 'history-item' + (item.id === currentId ? ' active' : '');
     el.dataset.id = item.id;
 
+    const text = document.createElement('div');
+    text.className = 'history-text';
+
     const urlLine = document.createElement('span');
     urlLine.textContent = item.url;
 
@@ -35,8 +85,10 @@ function renderHistory(items) {
     statusLine.className = 'status status-' + item.status;
     statusLine.textContent = statusLabel(item.status);
 
-    el.appendChild(urlLine);
-    el.appendChild(statusLine);
+    text.appendChild(urlLine);
+    text.appendChild(statusLine);
+    el.appendChild(text);
+    syncRetryButton(el, item.url, item.status);
     el.addEventListener('click', () => openSubmission(item.id));
     historyEl.appendChild(el);
   }
@@ -55,10 +107,16 @@ function markActiveInSidebar(id) {
 }
 
 function updateSidebarStatus(id, status) {
-  const el = historyEl.querySelector('.history-item[data-id="' + id + '"] .status');
-  if (el) {
+  const item = historyEl.querySelector('.history-item[data-id="' + id + '"]');
+  if (item) {
+    const el = item.querySelector('.status');
     el.className = 'status status-' + status;
     el.textContent = statusLabel(status);
+    syncRetryButton(item, item.querySelector('.history-text span').textContent, status);
+  }
+  if (currentEntry && currentEntry.id === id) {
+    currentEntry.status = status;
+    syncRunBar();
   }
 }
 
@@ -108,6 +166,8 @@ async function openSubmission(id) {
   const res = await fetch('/api/sessions/' + id + '/transcript');
   if (!res.ok) return;
   const data = await res.json();
+  currentEntry = { id: data.entry.id, url: data.entry.url, status: data.entry.status };
+  syncRunBar();
   outputEl.textContent = data.transcript;
   outputEl.scrollTop = outputEl.scrollHeight;
 
@@ -117,12 +177,7 @@ async function openSubmission(id) {
   }
 }
 
-submitForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const url = urlInput.value.trim();
-  if (!url) return;
-  urlInput.value = '';
-
+async function startSubmission(url) {
   const res = await fetch('/api/submit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -135,11 +190,28 @@ submitForm.addEventListener('submit', async (event) => {
   const { id } = await res.json();
 
   currentId = id;
+  currentEntry = { id, url, status: 'running' };
+  syncRunBar();
   outputEl.textContent = '';
   showAnswerRow(false);
   await refreshHistory();
   markActiveInSidebar(id);
   connectSocket(id);
+}
+
+submitForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const url = urlInput.value.trim();
+  if (!url) return;
+  urlInput.value = '';
+  await startSubmission(url);
+});
+
+retryBtn.appendChild(retryIcon.content.cloneNode(true));
+// Retry is a fresh submission of the same URL; the failed run stays in the
+// history as a record.
+retryBtn.addEventListener('click', () => {
+  if (currentEntry) startSubmission(currentEntry.url);
 });
 
 answerForm.addEventListener('submit', (event) => {

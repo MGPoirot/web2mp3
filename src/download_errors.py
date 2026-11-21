@@ -6,6 +6,14 @@ from typing import Literal
 
 Kind = Literal["permanent", "retryable"]
 
+# yt-dlp ends up with no usable audio format. With a cookie file this is often
+# the account-specific SABR-only experiment (yt-dlp issue 12482), which an
+# anonymous session is not subject to.
+_FORMAT_UNAVAILABLE = re.compile(
+    r"requested format is not available|no video formats found|only images are available|sabr",
+    re.I,
+)
+
 # Checked first so cookie/bot/network wording wins over a generic "unavailable".
 _RETRYABLE_PATTERNS = (
     re.compile(r"sign in to confirm", re.I),
@@ -20,6 +28,7 @@ _RETRYABLE_PATTERNS = (
     re.compile(r"\b50[234]\b|http 5\d\d", re.I),
     re.compile(r"js challenge|n-?sig|deno", re.I),
     re.compile(r"http error 403|status code 403", re.I),
+    _FORMAT_UNAVAILABLE,
 )
 
 _PERMANENT_PATTERNS = (
@@ -34,6 +43,11 @@ _PERMANENT_PATTERNS = (
     re.compile(r"no longer available", re.I),
     re.compile(r"video is unavailable", re.I),
 )
+
+
+def is_format_unavailable_error(exc: BaseException | str) -> bool:
+    """True when the failure is "no downloadable format", not a dead video."""
+    return bool(_FORMAT_UNAVAILABLE.search(str(exc)))
 
 
 def classify_download_error(exc: BaseException | str) -> tuple[Kind, str]:
